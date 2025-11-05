@@ -11,6 +11,7 @@ using System.Threading;
 namespace AsioAudioEngine.Tests.Winforms
 {
     [TestFixture]
+    [Category("Integration")]
     public class WinFormsTests
     {
         private Application? app;
