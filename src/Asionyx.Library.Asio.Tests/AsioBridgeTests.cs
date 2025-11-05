@@ -5,6 +5,7 @@ namespace AsioAudioEngine.Tests
 {
     [TestFixture]
     [Apartment(System.Threading.ApartmentState.STA)]
+    [Category("Integration")]
     public class AsioAudioEngineTests
     {
         [TestCase(2, 1, 2, "No audio detected on output device channel 3/4 from input device channel 1/2.")]

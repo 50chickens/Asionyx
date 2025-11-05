@@ -4,6 +4,7 @@ namespace AsioAudioEngine.Tests
 {
     [TestFixture]
     [Apartment(System.Threading.ApartmentState.STA)]
+    [Category("Integration")]
     public class DeviceChannelCountTests
     {
         
