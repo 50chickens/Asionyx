@@ -1,0 +1,15 @@
+write a .net test gui app that allows me to select a device using asio audio and send that same audio to another asio audio device. 
+add audio meters for input and output.
+reference C:\git\NAudio
+use C:\git\NAudio instead of the naudio nuget package
+add a menu with an exit button
+add a channel selector for the input and output routing
+update the channel selector to support mono (single channel) or stereo
+add a mute button for input and output
+add a mp3 player which has its own destination asio audio device
+add volume controls for the input, output and mp3 player
+for the channel selection, enumerate the asio device and use a combo box which allows a user to select which channels it should use - eg for mono you can select, 1 or 2 or 3 or 4 but for stereo you can choose 1/2, 2/3, 3/4 .
+add a checkbox to include the asio4all device in both the input and output & mp3 devices which defaults to off
+add saving the ui settings to a settings file so on each load it remembers. if the settings fails to load the ui should revert to defaults
+update the app so that the device channels are populated on application load.
+add a feature to play a test sound through the mp3 audio output - allow the user to select any frequency but default to 440hz

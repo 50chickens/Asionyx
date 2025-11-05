@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  
+
+  
+  <ItemGroup>
+    <ProjectReference Include="..\Asionyx.Library.Asio\Asionyx.Library.Asio.csproj" />
+    <ProjectReference Include="..\Asionyx.Library.Spectrum\Asionyx.Library.Spectrum.csproj" />
+  </ItemGroup>
+
+</Project>
