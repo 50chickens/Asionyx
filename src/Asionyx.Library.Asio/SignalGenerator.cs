@@ -1,6 +1,6 @@
 using NAudio.Wave;
 
-namespace AsioAudioRouter;
+namespace Asionyx.Library.Asio;
 
 public class SignalGenerator : IWaveProvider
 {

@@ -1,9 +1,10 @@
 using System.Text.Json;
 using NAudio.Wave;
-using AsioRouter.Spectrum;
-using AsioAudioEngine;
+using Asionyx.Library.Spectrum;
+using Asionyx.Library.Asio;
+using Asionyx.Audio.Core;
 
-namespace AsioAudioRouter;
+namespace Asionyx.Ui.Winforms;
 
 public partial class Form1 : Form
 {

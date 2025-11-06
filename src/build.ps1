@@ -1,11 +1,13 @@
 $commands = @(
-    "dotnet clean .\AsioAudioRouter.sln",
-    "dotnet build .\AsioAudioRouter.sln",
-    "dotnet test -no-restore .\AsioAudioRouter.sln",
-    "dotnet run .\AsioAudioRouter.sln"
+    "dotnet clean .\Asionyx.sln",
+    "dotnet build .\Asionyx.sln",
+    "dotnet test .\Asionyx.sln"
 )
-##check for errors and if not found do the next part
 
+if ((pwd).Path -notlike "*\src") {
+    cd .\src
+}
+## Run each command and stop on first failure
 $commands | ForEach-Object {
     Write-Host "Executing: $_"
     Invoke-Expression $_
@@ -14,3 +16,5 @@ $commands | ForEach-Object {
         exit $LASTEXITCODE
     }
 }
+
+Write-Host "Build script finished successfully."

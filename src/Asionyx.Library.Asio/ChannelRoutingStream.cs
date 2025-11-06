@@ -1,7 +1,7 @@
 using NAudio.Wave;
-
-namespace AsioAudioRouter;
-
+ 
+namespace Asionyx.Library.Asio;
+ 
 /// <summary>
 /// Wrapper that routes audio to specific ASIO channels
 /// </summary>

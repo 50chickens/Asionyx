@@ -1,7 +1,8 @@
 using NUnit.Framework;
 using System;
 using System.Linq;
-namespace AsioRouter.Spectrum.Tests
+using Asionyx.Library.Spectrum;
+namespace Asionyx.Library.Spectrum.Tests
 {
     [TestFixture]
     public class SpectrumAnalyzerTests

@@ -1,5 +1,5 @@
-﻿namespace AsioAudioRouter;
-
+﻿namespace Asionyx.Ui.Winforms;
+ 
 partial class Form1
 {
     /// <summary>
