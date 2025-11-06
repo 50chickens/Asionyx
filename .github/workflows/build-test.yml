@@ -2,16 +2,16 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - develop
+      - 'feature/*'
   workflow_dispatch:
-
 jobs:
   build-and-test:
     runs-on: windows-latest
-    
     permissions:
       contents: read
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
