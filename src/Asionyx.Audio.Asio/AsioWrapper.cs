@@ -3,7 +3,7 @@ using NAudio.Wave.Asio;
 using System;
 using Asionyx.Audio.Core;
 
-namespace Asionyx.Library.Asio;
+namespace Asionyx.Audio.Asio;
 
 internal class AsioOutWrapper : IAsioOutWrapper
 {

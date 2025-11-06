@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Asionyx.Audio.Asio\Asionyx.Audio.Asio.csproj" />
+    <ProjectReference Include="..\Asionyx.Audio.Core\Asionyx.Audio.Core.csproj" />
+    <ProjectReference Include="..\Asionyx.Library.Asio\Asionyx.Library.Asio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.13.3" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.0" />
+    <PackageReference Include="NAudio" Version="2.2.0" />
+  </ItemGroup>
+</Project>

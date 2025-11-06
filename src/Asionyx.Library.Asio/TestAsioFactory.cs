@@ -5,7 +5,7 @@ using System.Threading;
 using NAudio.Wave;
 using Asionyx.Audio.Core;
 
-namespace AsioAudioEngine;
+namespace Asionyx.Library.Asio;
 
 // A fake ASIO output wrapper that reads from a provided IWaveProvider (typically BufferedWaveProvider)
 // and exposes raw float samples via an internal SamplesAvailable event so a fake monitor can subscribe.
@@ -107,6 +107,7 @@ internal class FakeMonitorWrapper : IAsioOutWrapper
         // Monitor exposes two input channels (left/right) mapped from source physical channels 3/4
         DriverInputChannelCount = 2;
         DriverOutputChannelCount = 0;
+        // deterministic mapping: always map physical channels 3 and 4 => monitor L/R
         source.SamplesAvailable += Source_SamplesAvailable;
     }
 
@@ -114,12 +115,14 @@ internal class FakeMonitorWrapper : IAsioOutWrapper
     {
         if (floats == null || floats.Length == 0) return;
 
-        // Determine sourceChannels/frames, prefer declared but infer if mismatched
+        // Prefer declared output channel count but guard against mismatches
         int sourceChannels = Math.Max(1, source.DriverOutputChannelCount);
         int frames = (sourceChannels > 0) ? (floats.Length / sourceChannels) : 0;
+
+        // If inference needed, pick the largest divisor up to 8
         if (frames == 0 || frames * sourceChannels != floats.Length)
         {
-            for (int tryCh = 4; tryCh >= 1; tryCh--)
+            for (int tryCh = Math.Min(8, floats.Length); tryCh >= 1; tryCh--)
             {
                 if (floats.Length % tryCh == 0)
                 {
@@ -136,44 +139,27 @@ internal class FakeMonitorWrapper : IAsioOutWrapper
             return;
         }
 
-        // If not enough channels to map 3/4, passthrough
-        if (sourceChannels <= 3)
-        {
-            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, sourceChannels, frames));
-            return;
-        }
+        // If there are at least 4 physical channels, map 3->L and 4->R deterministically.
+        // Otherwise, map first two channels (0/1) to L/R.
+        bool use3456 = sourceChannels >= 4;
 
-        // Compute absolute sums for channels 1..4 to decide mapping robustly
-        double sumAll = 0.0;
-        double sumCh1 = 0.0, sumCh2 = 0.0, sumCh3 = 0.0, sumCh4 = 0.0;
-        for (int f = 0; f < frames; f++)
-        {
-            int baseIdx = f * sourceChannels;
-            if (baseIdx + 0 < floats.Length) { var v = Math.Abs(floats[baseIdx + 0]); sumCh1 += v; sumAll += v; }
-            if (baseIdx + 1 < floats.Length) { var v = Math.Abs(floats[baseIdx + 1]); sumCh2 += v; sumAll += v; }
-            if (baseIdx + 2 < floats.Length) { var v = Math.Abs(floats[baseIdx + 2]); sumCh3 += v; sumAll += v; }
-            if (baseIdx + 3 < floats.Length) { var v = Math.Abs(floats[baseIdx + 3]); sumCh4 += v; sumAll += v; }
-        }
-
-        // If channels 3/4 carry negligible energy relative to overall signal, fall back to channels 1/2.
-        bool fallbackToFirstPair = false;
-        if (sumAll > 0)
-        {
-            double energy34 = sumCh3 + sumCh4;
-            if (energy34 / sumAll < 1e-3) fallbackToFirstPair = true; // require at least 0.1% energy in 3/4 to use them
-        }
-
-        // Build 2-channel output selecting either channels 3/4 or 1/2 based on activity
         float[] outFloats = new float[frames * 2];
         for (int f = 0; f < frames; f++)
         {
-            int srcBase = f * sourceChannels;
-            int idxA = fallbackToFirstPair ? 0 : 2;
-            int idxB = fallbackToFirstPair ? 1 : 3;
-            float a = (srcBase + idxA) < floats.Length ? floats[srcBase + idxA] : 0f;
-            float b = (srcBase + idxB) < floats.Length ? floats[srcBase + idxB] : 0f;
-            outFloats[f * 2] = a;
-            outFloats[f * 2 + 1] = b;
+            int baseIdx = f * sourceChannels;
+            float l = 0f, r = 0f;
+            if (use3456)
+            {
+                l = (baseIdx + 2) < floats.Length ? floats[baseIdx + 2] : 0f;
+                r = (baseIdx + 3) < floats.Length ? floats[baseIdx + 3] : l;
+            }
+            else
+            {
+                l = (baseIdx + 0) < floats.Length ? floats[baseIdx + 0] : 0f;
+                r = (baseIdx + 1) < floats.Length ? floats[baseIdx + 1] : l;
+            }
+            outFloats[f * 2] = l;
+            outFloats[f * 2 + 1] = r;
         }
 
         AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(outFloats, 2, frames));

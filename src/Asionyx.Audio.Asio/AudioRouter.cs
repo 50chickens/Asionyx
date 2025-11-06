@@ -6,8 +6,9 @@ using System.Collections.Concurrent;
 using System.Buffers;
 using System.Threading.Tasks;
 using Asionyx.Audio.Core;
+using System.IO;
 
-namespace Asionyx.Library.Asio;
+namespace Asionyx.Audio.Asio;
 
 public class AudioRouter : IDisposable
 {
