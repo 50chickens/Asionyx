@@ -1,12 +1,15 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Asionyx.Library.Asio;
+using Asionyx.Audio.Core;
 
 var builder = Host.CreateDefaultBuilder(args)
    .ConfigureAppConfiguration((context, cfg) =>
@@ -21,6 +24,31 @@ var builder = Host.CreateDefaultBuilder(args)
                // Minimal services required for a Kestrel-hosted control-plane
                services.AddEndpointsApiExplorer();
                services.AddSwaggerGen();
+
+               // Cross-platform DI: register IAsioFactory with OS-specific selection.
+               // - On Windows prefer real drivers (if available), fall back to TestAsioFactory.
+               // - On non-Windows use TestAsioFactory with fakes by default.
+               services.AddSingleton<IAsioFactory>(sp =>
+               {
+                   var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+                   if (isWindows)
+                   {
+                       // Attempt to use real drivers when present; TestAsioFactory will choose real drivers if available.
+                       try
+                       {
+                           return new TestAsioFactory(forceFake: false) as IAsioFactory;
+                       }
+                       catch
+                       {
+                           return new TestAsioFactory(forceFake: true);
+                       }
+                   }
+                   else
+                   {
+                       // Non-Windows: use fake factory to avoid platform-specific dependencies
+                       return new TestAsioFactory(forceFake: true);
+                   }
+               });
            })
            .Configure(app =>
            {
