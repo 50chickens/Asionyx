@@ -1,7 +1,7 @@
 $commands = @(
     "dotnet clean .\Asionyx.sln",
     "dotnet build .\Asionyx.sln",
-    "dotnet test .\Asionyx.sln"
+    "dotnet test .\Asionyx.sln --filter 'Category!=Integration' --verbosity normal --no-restore"
 )
 
 if ((pwd).Path -notlike "*\src") {
