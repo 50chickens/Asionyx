@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using NAudio.Wave;
-using Asionyx.Audio.Core;
+using Asionyx.Library.Core;
 
 namespace Asionyx.Library.Asio;
 

@@ -6,7 +6,8 @@ using System.Collections.Concurrent;
 using System.Buffers;
 using System.Threading.Tasks;
 using Asionyx.Library.Core;
-namespace Asionyx.Library.Asio;
+
+namespace Asionyx.Library.Core;
 
 public class AudioRouter : IDisposable
 {
@@ -70,7 +71,7 @@ public class AudioRouter : IDisposable
 
     private readonly IAsioFactory asioFactory;
 
-    public AudioRouter() : this(new AsioFactory()) { }
+    public AudioRouter() : this(new TestAsioFactory(forceFake: true)) { }
 
     public AudioRouter(IAsioFactory asioFactory)
     {

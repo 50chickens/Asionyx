@@ -1,13 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <Description>DECOMMISSIONED: Asionyx.Audio.Core — project retained only as tombstone. Do not reference this project; use Asionyx.Library.Core instead.</Description>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <None Include="README_DECOMMISSIONED.md" Pack="false" />
   </ItemGroup>
-
 </Project>

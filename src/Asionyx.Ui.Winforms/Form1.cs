@@ -1,14 +1,14 @@
 using System.Text.Json;
 using NAudio.Wave;
 using Asionyx.Library.Spectrum;
-using Asionyx.Library.Asio;
-using Asionyx.Audio.Core;
+using AsioLib = Asionyx.Library.Asio;
+using Core = Asionyx.Library.Core;
 
 namespace Asionyx.Ui.Winforms;
 
 public partial class Form1 : Form
 {
-    private AudioRouter? router;
+    private Core.AudioRouter? router;
     private System.Windows.Forms.Timer? levelMeterTimer;
 
     // UI level values
@@ -33,7 +33,7 @@ public partial class Form1 : Form
 
     // Test tone generator variables
     private AsioOut? asioTestTone;
-    private SignalGenerator? testToneGenerator;
+    private Core.SignalGenerator? testToneGenerator;
     private bool isTestTonePlaying = false;
 
     // Settings
@@ -46,7 +46,7 @@ public partial class Form1 : Form
     private Button? buttonPlayDiagnostic;
 
     // --- Monitor input state (logic only) ---
-    private IAsioOutWrapper? asioMonitorWrapper;
+    private Core.IAsioOutWrapper? asioMonitorWrapper;
     private int selectedMonitorChannelCount = 2;
     private int monitorStartChannel = 0;
     private float monitorVolume = 1.0f;
@@ -64,7 +64,7 @@ public partial class Form1 : Form
     private int spectrumDbFloor = -60;
 
     // ASIO factory used for device enumeration and creating wrappers. Can be TestAsioFactory in test mode.
-    private IAsioFactory? asioFactory;
+    private Core.IAsioFactory? asioFactory;
 
     public Form1()
     {
@@ -81,9 +81,9 @@ public partial class Form1 : Form
             if (args.Any(a => string.Equals(a, "--asio-test", StringComparison.OrdinalIgnoreCase))) testMode = true;
             if (Environment.GetEnvironmentVariable("ASIO_TEST_MODE") == "1") testMode = true;
         } catch { }
-        asioFactory = testMode ? new TestAsioFactory(forceFake: true) as IAsioFactory : new AsioFactory();
+        asioFactory = testMode ? new AsioLib.TestAsioFactory(forceFake: true) as Core.IAsioFactory : new AsioLib.AsioFactory() as Core.IAsioFactory;
 
-        router = new AudioRouter(asioFactory!);
+        router = new Core.AudioRouter(asioFactory!);
         router.StatusLogged += Router_StatusLogged;
         router.AudioLogged += Router_AudioLogged;
         router.LevelsUpdated += Router_LevelsUpdated;
@@ -115,7 +115,7 @@ public partial class Form1 : Form
         spectrumAnalyzer = new SpectrumAnalyzer(1024);
     }
 
-    private void Router_LevelsUpdated(object? sender, AudioLevelsEventArgs e)
+    private void Router_LevelsUpdated(object? sender, Core.AudioLevelsEventArgs e)
     {
         // update UI levels from engine event (thread marshaling later in UpdateLevelMeters)
         inputLeftLevel = Math.Max(inputLeftLevel * 0.7f, e.Left);
@@ -587,7 +587,7 @@ public partial class Form1 : Form
         ParseChannelSelection(comboBoxInputChannels.SelectedItem?.ToString() ?? "", out selectedInputChannelCount, out inputStartChannel);
         ParseChannelSelection(comboBoxOutputChannels.SelectedItem?.ToString() ?? "", out selectedOutputChannelCount, out outputStartChannel);
 
-        if (router == null) router = new AudioRouter();
+        if (router == null) router = new Core.AudioRouter();
         router.EnableDiagnostics = true;
         router.InputVolume = trackBarInputVolume.Value / 100.0f;
         router.OutputVolume = trackBarOutputVolume.Value / 100.0f;
@@ -813,7 +813,7 @@ public partial class Form1 : Form
         IWaveProvider outputProvider;
         if (mp3StartChannel > 0 && totalChannels > selectedMP3ChannelCount)
         {
-            outputProvider = new ChannelRoutingStream(mp3Reader, mp3StartChannel, totalChannels);
+            outputProvider = new Core.ChannelRoutingStream(mp3Reader, mp3StartChannel, totalChannels);
             LogStatus($"Routing MP3 to physical channels {mp3StartChannel + 1}-{mp3StartChannel + selectedMP3ChannelCount}");
         }
         else { outputProvider = mp3Reader; LogStatus($"Routing MP3 to physical channels 1-{selectedMP3ChannelCount}"); }
@@ -847,13 +847,13 @@ public partial class Form1 : Form
         if (frequency < 20) frequency = 20; if (frequency > 20000) frequency = 20000;
         ParseChannelSelection(comboBoxMP3Channels.SelectedItem?.ToString() ?? "", out selectedMP3ChannelCount, out mp3StartChannel);
 
-        testToneGenerator = new SignalGenerator(48000, selectedMP3ChannelCount) { Gain = 0.5, Frequency = frequency };
+        testToneGenerator = new Core.SignalGenerator(48000, selectedMP3ChannelCount) { Gain = 0.5, Frequency = frequency };
         int totalChannels = GetDeviceOutputChannelCount(deviceName);
 
         IWaveProvider outputProvider;
         if (mp3StartChannel > 0 && totalChannels > selectedMP3ChannelCount)
         {
-            outputProvider = new ChannelRoutingStream(testToneGenerator, mp3StartChannel, totalChannels);
+            outputProvider = new Core.ChannelRoutingStream(testToneGenerator, mp3StartChannel, totalChannels);
             LogStatus($"Routing test tone to physical channels {mp3StartChannel + 1}-{mp3StartChannel + selectedMP3ChannelCount}");
         }
         else { outputProvider = testToneGenerator; LogStatus($"Routing test tone to physical channels 1-{selectedMP3ChannelCount}"); }
@@ -1012,7 +1012,7 @@ public partial class Form1 : Form
         if (wasRunning) StartMonitor();
     }
 
-    private void Monitor_AudioAvailable(object? sender, AudioAvailableEventArgs e)
+    private void Monitor_AudioAvailable(object? sender, Core.AudioAvailableEventArgs e)
     {
         if (!isMonitorRunning) return;
         try
@@ -1100,7 +1100,7 @@ public partial class Form1 : Form
         SaveSettings();
     }
 
-    private void Router_RawInputAvailable(object? sender, AudioAvailableEventArgs e)
+    private void Router_RawInputAvailable(object? sender, Core.AudioAvailableEventArgs e)
     {
         // Forward raw interleaved samples to spectrum analyzer (non-blocking)
         try

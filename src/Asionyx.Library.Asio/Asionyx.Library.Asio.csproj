@@ -11,7 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Asionyx.Audio.Core\Asionyx.Audio.Core.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Core\Asionyx.Library.Core.csproj" />
   </ItemGroup>
 

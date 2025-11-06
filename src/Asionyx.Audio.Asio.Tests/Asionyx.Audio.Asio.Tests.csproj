@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Asionyx.Audio.Asio\Asionyx.Audio.Asio.csproj" />
-    <ProjectReference Include="..\Asionyx.Audio.Core\Asionyx.Audio.Core.csproj" />
+    <ProjectReference Include="..\Asionyx.Library.Core\Asionyx.Library.Core.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Asio\Asionyx.Library.Asio.csproj" />
   </ItemGroup>
 

@@ -1,7 +1,7 @@
 using NAudio.Wave;
 using NAudio.Wave.Asio;
 using System;
-using Asionyx.Audio.Core;
+using Asionyx.Library.Core;
 
 namespace Asionyx.Library.Asio;
 

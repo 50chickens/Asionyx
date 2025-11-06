@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Asionyx.Library.Asio;
-using Asionyx.Audio.Core;
+using Asionyx.Library.Core;
 
 var builder = Host.CreateDefaultBuilder(args)
    .ConfigureAppConfiguration((context, cfg) =>
