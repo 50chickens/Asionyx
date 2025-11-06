@@ -1,7 +1,7 @@
 using System;
 using System.Numerics;
 
-namespace AsioRouter.Spectrum
+namespace Asionyx.Library.Spectrum
 {
     public class SpectrumAnalyzer
     {

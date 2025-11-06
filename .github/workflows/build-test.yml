@@ -2,18 +2,17 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - develop
+      - 'feature/*'
+      - 'copilot/*'
   workflow_dispatch:
-
 jobs:
   build-and-test:
     runs-on: windows-latest
-    
     permissions:
       contents: read
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -22,12 +21,7 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
-        
-    - name: Restore dependencies
-      run: dotnet restore src/Asionyx.sln
-      
     - name: Build
-      run: dotnet build src/Asionyx.sln --configuration Release --no-restore
-      
-    - name: Run unit tests (exclude Integration)
-      run: dotnet test src/Asionyx.sln --configuration Release --no-build --verbosity normal --filter "Category!=Integration"
+      shell: pwsh
+      run: |
+        ./src/build.ps1

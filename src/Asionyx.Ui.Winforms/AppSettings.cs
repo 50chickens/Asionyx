@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AsioAudioRouter;
+namespace Asionyx.Ui.Winforms;
 
 public class AppSettings
 {

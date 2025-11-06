@@ -179,7 +179,7 @@ namespace Asionyx.Audio.Asio.Tests
             // If any channel appears silent (very low dBFS) mark test inconclusive rather than failing
             for (int i = 0; i < 4; i++)
             {
-                if (!(lastDbfs[i] > -100))
+                if (!(lastDbfs[i] > -120))
                 {
                     Assert.Inconclusive($"Channel {i + 1} dBFS too low (likely silence) - value={lastDbfs[i]:F2} dBFS. Test inconclusive on this hardware.");
                     return;

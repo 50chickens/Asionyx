@@ -1,5 +1,5 @@
-namespace AsioAudioRouter;
-
+namespace Asionyx.Ui.Winforms;
+ 
 static class Program
 {
     /// <summary>
@@ -12,5 +12,5 @@ static class Program
         // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
         Application.Run(new Form1());
-    }    
+    }
 }
