@@ -113,29 +113,70 @@ internal class FakeMonitorWrapper : IAsioOutWrapper
     private void Source_SamplesAvailable(object? sender, float[]? floats)
     {
         if (floats == null || floats.Length == 0) return;
-        // Source floats are interleaved with sourceChannels equal to the FakeAsioOutWrapper.DriverOutputChannelCount
-        int sourceChannels = source.DriverOutputChannelCount;
-        if (sourceChannels <= 3)
+
+        // Determine sourceChannels/frames, prefer declared but infer if mismatched
+        int sourceChannels = Math.Max(1, source.DriverOutputChannelCount);
+        int frames = (sourceChannels > 0) ? (floats.Length / sourceChannels) : 0;
+        if (frames == 0 || frames * sourceChannels != floats.Length)
         {
-            // not enough channels on source, fall back to passing through as-is (attempt)
-            int frames = floats.Length / Math.Max(1, sourceChannels);
-            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, Math.Max(1, sourceChannels), frames));
+            for (int tryCh = 4; tryCh >= 1; tryCh--)
+            {
+                if (floats.Length % tryCh == 0)
+                {
+                    sourceChannels = tryCh;
+                    frames = floats.Length / sourceChannels;
+                    break;
+                }
+            }
+        }
+
+        if (frames == 0)
+        {
+            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, Math.Max(1, source.DriverOutputChannelCount), 1));
             return;
         }
 
-        int framesCount = floats.Length / sourceChannels;
-        // build 2-channel buffer from source channels 3 and 4 (indexes 2 and 3)
-        float[] outFloats = new float[framesCount * 2];
-        for (int f = 0; f < framesCount; f++)
+        // If not enough channels to map 3/4, passthrough
+        if (sourceChannels <= 3)
         {
-            int srcBase = f * sourceChannels;
-            float ch3 = srcBase + 2 < floats.Length ? floats[srcBase + 2] : 0f;
-            float ch4 = srcBase + 3 < floats.Length ? floats[srcBase + 3] : 0f;
-            outFloats[f * 2] = ch3;
-            outFloats[f * 2 + 1] = ch4;
+            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, sourceChannels, frames));
+            return;
         }
 
-        AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(outFloats, 2, framesCount));
+        // Compute absolute sums for channels 1..4 to decide mapping robustly
+        double sumAll = 0.0;
+        double sumCh1 = 0.0, sumCh2 = 0.0, sumCh3 = 0.0, sumCh4 = 0.0;
+        for (int f = 0; f < frames; f++)
+        {
+            int baseIdx = f * sourceChannels;
+            if (baseIdx + 0 < floats.Length) { var v = Math.Abs(floats[baseIdx + 0]); sumCh1 += v; sumAll += v; }
+            if (baseIdx + 1 < floats.Length) { var v = Math.Abs(floats[baseIdx + 1]); sumCh2 += v; sumAll += v; }
+            if (baseIdx + 2 < floats.Length) { var v = Math.Abs(floats[baseIdx + 2]); sumCh3 += v; sumAll += v; }
+            if (baseIdx + 3 < floats.Length) { var v = Math.Abs(floats[baseIdx + 3]); sumCh4 += v; sumAll += v; }
+        }
+
+        // If channels 3/4 carry negligible energy relative to overall signal, fall back to channels 1/2.
+        bool fallbackToFirstPair = false;
+        if (sumAll > 0)
+        {
+            double energy34 = sumCh3 + sumCh4;
+            if (energy34 / sumAll < 1e-3) fallbackToFirstPair = true; // require at least 0.1% energy in 3/4 to use them
+        }
+
+        // Build 2-channel output selecting either channels 3/4 or 1/2 based on activity
+        float[] outFloats = new float[frames * 2];
+        for (int f = 0; f < frames; f++)
+        {
+            int srcBase = f * sourceChannels;
+            int idxA = fallbackToFirstPair ? 0 : 2;
+            int idxB = fallbackToFirstPair ? 1 : 3;
+            float a = (srcBase + idxA) < floats.Length ? floats[srcBase + idxA] : 0f;
+            float b = (srcBase + idxB) < floats.Length ? floats[srcBase + idxB] : 0f;
+            outFloats[f * 2] = a;
+            outFloats[f * 2 + 1] = b;
+        }
+
+        AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(outFloats, 2, frames));
     }
 
     public int DriverInputChannelCount { get; }

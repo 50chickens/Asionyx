@@ -5,6 +5,7 @@ using System.Threading;
 using System.Collections.Concurrent;
 using System.Buffers;
 using System.Threading.Tasks;
+using Asionyx.Audio.Core;
 
 namespace AsioAudioEngine;
 
