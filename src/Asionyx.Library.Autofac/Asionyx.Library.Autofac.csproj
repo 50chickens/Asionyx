@@ -2,17 +2,17 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="NAudio.Asio" Version="2.2.1" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Asionyx.Audio.Core\Asionyx.Audio.Core.csproj" />
+    <ProjectReference Include="..\Asionyx.Audio.Asio\Asionyx.Audio.Asio.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Core\Asionyx.Library.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Autofac" Version="7.3.0" />
+  </ItemGroup>
 </Project>

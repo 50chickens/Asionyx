@@ -3,8 +3,9 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using NAudio.Wave;
+using Asionyx.Audio.Core;
 
-namespace AsioAudioEngine;
+namespace Asionyx.Library.Asio;
 
 // A fake ASIO output wrapper that reads from a provided IWaveProvider (typically BufferedWaveProvider)
 // and exposes raw float samples via an internal SamplesAvailable event so a fake monitor can subscribe.
@@ -106,35 +107,62 @@ internal class FakeMonitorWrapper : IAsioOutWrapper
         // Monitor exposes two input channels (left/right) mapped from source physical channels 3/4
         DriverInputChannelCount = 2;
         DriverOutputChannelCount = 0;
+        // deterministic mapping: always map physical channels 3 and 4 => monitor L/R
         source.SamplesAvailable += Source_SamplesAvailable;
     }
 
     private void Source_SamplesAvailable(object? sender, float[]? floats)
     {
         if (floats == null || floats.Length == 0) return;
-        // Source floats are interleaved with sourceChannels equal to the FakeAsioOutWrapper.DriverOutputChannelCount
-        int sourceChannels = source.DriverOutputChannelCount;
-        if (sourceChannels <= 3)
+
+        // Prefer declared output channel count but guard against mismatches
+        int sourceChannels = Math.Max(1, source.DriverOutputChannelCount);
+        int frames = (sourceChannels > 0) ? (floats.Length / sourceChannels) : 0;
+
+        // If inference needed, pick the largest divisor up to 8
+        if (frames == 0 || frames * sourceChannels != floats.Length)
         {
-            // not enough channels on source, fall back to passing through as-is (attempt)
-            int frames = floats.Length / Math.Max(1, sourceChannels);
-            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, Math.Max(1, sourceChannels), frames));
+            for (int tryCh = Math.Min(8, floats.Length); tryCh >= 1; tryCh--)
+            {
+                if (floats.Length % tryCh == 0)
+                {
+                    sourceChannels = tryCh;
+                    frames = floats.Length / sourceChannels;
+                    break;
+                }
+            }
+        }
+
+        if (frames == 0)
+        {
+            AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(floats, Math.Max(1, source.DriverOutputChannelCount), 1));
             return;
         }
 
-        int framesCount = floats.Length / sourceChannels;
-        // build 2-channel buffer from source channels 3 and 4 (indexes 2 and 3)
-        float[] outFloats = new float[framesCount * 2];
-        for (int f = 0; f < framesCount; f++)
+        // If there are at least 4 physical channels, map 3->L and 4->R deterministically.
+        // Otherwise, map first two channels (0/1) to L/R.
+        bool use3456 = sourceChannels >= 4;
+
+        float[] outFloats = new float[frames * 2];
+        for (int f = 0; f < frames; f++)
         {
-            int srcBase = f * sourceChannels;
-            float ch3 = srcBase + 2 < floats.Length ? floats[srcBase + 2] : 0f;
-            float ch4 = srcBase + 3 < floats.Length ? floats[srcBase + 3] : 0f;
-            outFloats[f * 2] = ch3;
-            outFloats[f * 2 + 1] = ch4;
+            int baseIdx = f * sourceChannels;
+            float l = 0f, r = 0f;
+            if (use3456)
+            {
+                l = (baseIdx + 2) < floats.Length ? floats[baseIdx + 2] : 0f;
+                r = (baseIdx + 3) < floats.Length ? floats[baseIdx + 3] : l;
+            }
+            else
+            {
+                l = (baseIdx + 0) < floats.Length ? floats[baseIdx + 0] : 0f;
+                r = (baseIdx + 1) < floats.Length ? floats[baseIdx + 1] : l;
+            }
+            outFloats[f * 2] = l;
+            outFloats[f * 2 + 1] = r;
         }
 
-        AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(outFloats, 2, framesCount));
+        AudioAvailable?.Invoke(this, new AudioAvailableEventArgs(outFloats, 2, frames));
     }
 
     public int DriverInputChannelCount { get; }

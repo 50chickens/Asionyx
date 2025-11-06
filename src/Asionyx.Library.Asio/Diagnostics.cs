@@ -1,6 +1,6 @@
 using System;
 
-namespace AsioAudioEngine;
+namespace Asionyx.Library.Asio;
 
 internal static class Diagnostics
 {

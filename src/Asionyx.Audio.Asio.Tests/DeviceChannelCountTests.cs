@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using NAudio.Wave;
 using NUnit.Framework;
- 
+
 namespace Asionyx.Audio.Asio.Tests
 {
     [TestFixture]
@@ -16,7 +16,7 @@ namespace Asionyx.Audio.Asio.Tests
             var drivers = AsioOut.GetDriverNames();
             if (drivers == null || drivers.Length == 0)
                 Assert.Inconclusive("No ASIO drivers available on this machine.");
- 
+
             foreach (var d in drivers)
             {
                 try
