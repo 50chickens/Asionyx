@@ -1,39 +1,41 @@
 Param(
-  [Parameter(Mandatory=$true)][string]$Branch,
+  [Parameter(Mandatory=$true)][string]$BranchName,
   [Parameter(Mandatory=$true)][string]$CommitMessage
 )
 
-if ([string]::IsNullOrWhiteSpace($Branch)) { throw "Branch parameter is required and cannot be empty." }
-if ([string]::IsNullOrWhiteSpace($CommitMessage)) { throw "CommitMessage parameter is required and cannot be empty." }
+if ([string]::IsNullOrWhiteSpace($BranchName)) { Write-Error "BranchName is required"; exit 2 }
+if ([string]::IsNullOrWhiteSpace($CommitMessage)) { Write-Error "CommitMessage is required"; exit 2 }
 
-Write-Host "Preparing to commit and push changes on branch $Branch"
-
-# Show whether there are changes to commit
-$changes = git status --porcelain
-if (-not $changes) {
-    Write-Host "No changes to commit."
-    exit 0
+# Normalize branch prefix if caller provided a simple name
+if ($BranchName -notmatch '^(feature/|decommission/|fix/|chore/|hotfix/|release/)') {
+  $Branch = "feature/$BranchName"
+} else {
+  $Branch = $BranchName
 }
 
-# Create or switch to branch, stage, commit and push
-git checkout -B $Branch
+# Create or checkout the branch
+try {
+  git rev-parse --verify $Branch > $null 2>&1
+  $exists = ($LASTEXITCODE -eq 0)
+} catch {
+  $exists = $false
+}
+
+if ($exists) {
+  git checkout $Branch
+} else {
+  git checkout -b $Branch
+}
+
+# Stage, commit and push
 git add -A
 
-$commitOutput = git commit -m "$CommitMessage" 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "git commit returned exit code $LASTEXITCODE. Output:"
-    Write-Host $commitOutput
-} else {
-    Write-Host "Committed changes."
+# Commit (will return non-zero if there are no staged changes)
+git commit -m $CommitMessage
+$commitExit = $LASTEXITCODE
+if ($commitExit -ne 0) {
+  Write-Output "git commit returned exit code $commitExit (no changes committed or an error occurred)."
 }
 
-Write-Host "Pushing branch $Branch to origin..."
-$pushOutput = git push -u origin $Branch 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "git push failed with exit code $LASTEXITCODE. Output:"
-    Write-Host $pushOutput
-    exit $LASTEXITCODE
-}
-
-Write-Host "Push succeeded."
-exit 0
+git push -u origin $Branch
+exit $LASTEXITCODE

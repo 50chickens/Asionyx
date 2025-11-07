@@ -1,6 +1,6 @@
 using NAudio.Wave;
 
-namespace Asionyx.Audio.Core;
+namespace Asionyx.Library.Core;
 
 public class AudioAvailableEventArgs : EventArgs
 {

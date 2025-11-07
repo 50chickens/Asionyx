@@ -1,7 +1,7 @@
 using NAudio.Wave;
 using System;
 
-namespace Asionyx.Audio.Core;
+namespace Asionyx.Library.Core;
 
 public class SignalGenerator : IWaveProvider
 {

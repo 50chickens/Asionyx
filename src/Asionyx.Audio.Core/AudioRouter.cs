@@ -560,7 +560,7 @@ internal class BackgroundDiagnosticWriter : IDisposable
                     }
                 }
                 catch (OperationCanceledException) { break; }
-                catch { /* ignore other transient errors */ }
+                catch { }
             }
 
             // If cancellation was not requested, flush remaining items normally
