@@ -9,31 +9,38 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-Write-Host "Restoring and building solution..." -ForegroundColor Green
-if (-not (Test-Path Asionyx.sln)) {
-    dotnet new sln -n Asionyx | Out-Null
-}
-# Add projects to solution (idempotent)
-Get-ChildItem -Path . -Filter *.csproj -Recurse | ForEach-Object { dotnet sln Asionyx.sln add $_.FullName | Out-Null }
 
 dotnet restore Asionyx.sln
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "dotnet restore failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+
 dotnet build Asionyx.sln -c Release
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "dotnet build failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+}
 
 # Build docker image (explicitly target Linux platform)
 Write-Host "Building docker image asionyx/deployment:local (linux)" -ForegroundColor Green
-# Build the base runtime image stage and tag it
-docker build --platform linux/amd64 -f Asionyx.Services.Deployment.Docker/Dockerfile --target base -t asionyx/base:local .
-
 # Build the final application/integration image (published apps copied into image)
-docker build --platform linux/amd64 -f Asionyx.Services.Deployment.Docker/Dockerfile -t asionyx/deployment:local .
+docker build -f Asionyx.Services.Deployment.Docker/Dockerfile -t asionyx/deployment:local .
 
 # Run container
 Write-Host "Starting container..." -ForegroundColor Green
+# Generate an API key for the test run and export it to the container and test process
+$apiKey = [guid]::NewGuid().ToString('N')
+Write-Host "Generated API key for integration run" -ForegroundColor Yellow
+
 # stop existing
 if (docker ps -a --format '{{.Names}}' | Select-String -Pattern '^asionyx_local$') {
     docker rm -f asionyx_local | Out-Null
 }
-docker run --platform linux/amd64 -d --name asionyx_local -p 5000:5000 asionyx/deployment:local | Out-Null
+
+# Pass the API key into the container environment. Also export locally so dotnet test can read it.
+$env:API_KEY = $apiKey
+docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey asionyx/deployment:local | Out-Null
 
 # wait for readiness
 $max = 60
@@ -47,8 +54,11 @@ for ($i=0; $i -lt $max; $i++) {
 if (-not $ok) { Write-Host "Container did not become ready" -ForegroundColor Red; docker logs asionyx_local; exit 2 }
 
 Write-Host "Container ready, running tests..." -ForegroundColor Green
+# Ensure tests have the API key environment variable available
+$env:API_KEY = $apiKey
 # Run integration tests (client tests expect endpoint at localhost:5000)
 dotnet test Asionyx.Services.Deployment.Client.Tests -c Release --no-build
+dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
 
 # Tear down
 Write-Host "Stopping container..." -ForegroundColor Green

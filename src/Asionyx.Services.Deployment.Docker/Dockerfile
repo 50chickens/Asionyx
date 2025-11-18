@@ -1,43 +1,17 @@
 # Dockerfile for Asionyx.Services.Deployment + SystemD emulator (for integration tests)
 # Use Debian Trixie and avoid Microsoft container images; install dotnet packages from Microsoft feed instead
 
-# Builder stage: Debian + dotnet SDK to publish apps
-FROM debian:trixie-slim AS builder
+## Use official Microsoft .NET SDK and ASP.NET runtime images to avoid manual apt setup
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
 WORKDIR /src
 
-# Install prerequisites and Microsoft package feed to get dotnet SDK
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends wget ca-certificates gnupg apt-transport-https \
-	&& wget -qO /tmp/packages-microsoft-prod.deb https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb \
-	&& dpkg -i /tmp/packages-microsoft-prod.deb \
-	&& apt-get update \
-	&& apt-get install -y --no-install-recommends dotnet-sdk-9.0 \
-	&& rm -rf /var/lib/apt/lists/* /tmp/packages-microsoft-prod.deb
-
-# Copy repository from build context (expect build context to be repository root)
+# Copy repository and publish projects using the official SDK image
 COPY . /src
+RUN dotnet publish Asionyx.Services.Deployment -c Release -o /app/deployment
+RUN dotnet publish Asionyx.Services.Deployment.SystemD -c Release -o /app/systemd
+RUN dotnet publish Asionyx.Services.HelloWorld -c Release -o /app/helloworld
 
-# Publish projects
-RUN dotnet publish src/Asionyx.Services.Deployment -c Release -o /app/deployment
-RUN dotnet publish src/Asionyx.Services.Deployment.SystemD -c Release -o /app/systemd
-RUN dotnet publish src/Asionyx.Services.HelloWorld -c Release -o /app/helloworld
-
-
-# Base runtime image: Debian + .NET runtime + PowerShell (these are runtime dependencies only)
-FROM debian:trixie-slim AS base
-WORKDIR /app
-
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends wget ca-certificates gnupg apt-transport-https \
-	&& wget -qO /tmp/packages-microsoft-prod.deb https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb \
-	&& dpkg -i /tmp/packages-microsoft-prod.deb \
-	&& apt-get update \
-	&& apt-get install -y --no-install-recommends dotnet-runtime-9.0 powershell \
-	&& rm -rf /var/lib/apt/lists/* /tmp/packages-microsoft-prod.deb
-
-
-# Final integration image derives from base and contains only published outputs
-FROM base AS final
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 # Copy published outputs from builder
@@ -46,8 +20,13 @@ COPY --from=builder /app/systemd ./systemd
 COPY --from=builder /app/helloworld ./helloworld
 
 # Copy entrypoint script (from repo path relative to build context)
-COPY src/Asionyx.Services.Deployment.Docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY Asionyx.Services.Deployment.Docker/entrypoint.sh /app/entrypoint.sh
+
+# Ensure the ASP.NET app listens on port 5000 inside the container
+ENV ASPNETCORE_URLS=http://+:5000
+
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+	&& chmod +x /app/entrypoint.sh
 
 EXPOSE 5000
 ENTRYPOINT ["/app/entrypoint.sh"]

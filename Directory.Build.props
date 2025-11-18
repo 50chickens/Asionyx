@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- Do not automatically escalate analyzer warnings to errors in this scaffold. Teams can enable stricter settings later. -->
+    <RunAnalyzersDuringBuild>true</RunAnalyzersDuringBuild>
+    <RunAnalyzersDuringLiveAnalysis>true</RunAnalyzersDuringLiveAnalysis>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Common analyzers applied to all projects in the repo -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="7.0.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
