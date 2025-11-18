@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [trixie, main]
+  pull_request:
+    branches: [trixie, main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x'
+      - name: Restore
+        run: |
+          dotnet restore src/Asionyx.sln
+      - name: Build
+        run: |
+          dotnet build src/Asionyx.sln -c Release --no-restore
+      - name: Run tests
+        run: |
+          dotnet test src/Asionyx.sln -c Release --no-build --verbosity normal

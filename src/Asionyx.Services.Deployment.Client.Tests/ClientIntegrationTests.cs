@@ -1,0 +1,17 @@
+using System.Net.Http;
+using System.Threading.Tasks;
+using NUnit.Framework;
+
+[TestFixture]
+public class ClientIntegrationTests
+{
+    [Test, Ignore("Scaffold - requires running deployment service")]
+    public async Task Client_Can_Call_Info()
+    {
+        using var client = new HttpClient();
+        var response = await client.GetAsync("http://localhost:5000/info");
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.That(body, Does.Contain("Asionyx.Services.Deployment"));
+    }
+}
