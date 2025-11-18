@@ -1,10 +1,5 @@
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using NLog.Web;
 using Asionyx.Library.Core;
 
@@ -15,6 +10,12 @@ var builder = Host.CreateDefaultBuilder(args)
     })
     .ConfigureWebHostDefaults(webBuilder =>
     {
+        webBuilder.UseKestrel(options =>
+        {
+            // Default Kestrel options. Update here as needed.
+            // Example: options.Limits.MaxConcurrentConnections = 100;
+        });
+
         webBuilder.ConfigureServices((context, services) =>
         {
             services.AddControllers();
