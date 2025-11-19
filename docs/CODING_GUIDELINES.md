@@ -299,7 +299,7 @@ Text parsing is a common source of brittle code, bugs, and performance issues. A
 
 - Prefer structured parsers over ad-hoc splitting:
   - Avoid brittle patterns like `var parts = s.Split(':'); var x = parts[1];` which can throw or silently mis-interpret malformed input.
-  - Use `TryParse`, JSON parsers (`System.Text.Json`), or CSV libraries (`CsvHelper`) when the input has a standard format.
+  - Use `TryParse`, JSON parsers (e.g. `Newtonsoft.Json`), or CSV libraries (`CsvHelper`) when the input has a standard format.
 
 - Use typed results and POCOs instead of raw arrays:
   - Parse text into a `record` or class (e.g., `record KeyValue(string Key, string Value)`) so callers expect typed data instead of positional indexes.
@@ -320,7 +320,7 @@ Text parsing is a common source of brittle code, bugs, and performance issues. A
 
 - Avoid hand-rolled parsers for known formats — prefer libraries:
   - For CSV/TSV use a proven parser (`CsvHelper`) to handle quoting/escaping reliably.
-  - For JSON use `System.Text.Json` or `Newtonsoft.Json` depending on requirements.
+  -  - For JSON use `Newtonsoft.Json` for compatibility with the project and deterministic behavior across controllers.
 
 - Concatenation and building strings:
   - Use `StringBuilder` for incremental concatenation in loops. For single-shot known-length concatenation prefer `string.Create` or interpolated strings.

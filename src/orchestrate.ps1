@@ -57,7 +57,14 @@ if (docker ps -a --format '{{.Names}}' | Select-String -Pattern '^asionyx_local$
 
 # Pass the API key into the container environment. Also export locally so dotnet test can read it.
 $env:API_KEY = $apiKey
-docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey -e ASIONYX_INSECURE_TESTING=1 asionyx/deployment:local | Out-Null
+# Create host diagnostics directory and bind-mount it into container so diagnostics and logs survive container removal
+$diagHost = Join-Path $scriptDir 'artifacts' 'diagnostics_host'
+if (-not (Test-Path $diagHost)) { New-Item -ItemType Directory -Path $diagHost -Force | Out-Null }
+
+# Run container with diagnostics bound into /var/asionyx/diagnostics and enable stdout diagnostics
+$env:ASIONYX_DIAG_TO_STDOUT = "1"
+Write-Host "Starting container with diagnostics bind mount -> $diagHost" -ForegroundColor Yellow
+docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey -e ASIONYX_INSECURE_TESTING=1 -e ASIONYX_DIAG_TO_STDOUT=1 -v "${diagHost}:/var/asionyx/diagnostics" asionyx/deployment:local | Out-Null
 
 # wait for readiness
 $max = 60
@@ -76,6 +83,16 @@ $env:API_KEY = $apiKey
 # Run integration tests (client tests expect endpoint at localhost:5000)
 dotnet test Asionyx.Services.Deployment.Client.Tests -c Release --no-build
 dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
+# Attempt to copy diagnostics out of the running container so failures can be inspected.
+$diagHost = Join-Path $scriptDir 'artifacts' 'diagnostics_' + (Get-Date -Format 'yyyyMMddHHmmss')
+if (-not (Test-Path $diagHost)) { New-Item -ItemType Directory -Path $diagHost | Out-Null }
+Write-Host "Attempting to copy diagnostics from container to $diagHost ..." -ForegroundColor Yellow
+try {
+    docker cp asionyx_local:/var/asionyx/diagnostics $diagHost 2>$null
+    Write-Host "Diagnostics copied to $diagHost" -ForegroundColor Green
+} catch {
+    Write-Host "No diagnostics found or docker cp failed" -ForegroundColor Yellow
+}
 try {
     # Tear down container
     Write-Host "Stopping container..." -ForegroundColor Green

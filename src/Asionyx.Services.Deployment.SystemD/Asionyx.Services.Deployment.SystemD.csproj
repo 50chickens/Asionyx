@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    
+    <ProjectReference Include="..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
   </ItemGroup>
 </Project>

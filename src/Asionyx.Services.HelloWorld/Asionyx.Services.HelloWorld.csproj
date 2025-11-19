@@ -8,4 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="9.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
+  </ItemGroup>
 </Project>

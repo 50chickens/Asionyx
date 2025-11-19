@@ -1,8 +1,11 @@
 using Asionyx.Library.Core;
+using Asionyx.Library.Shared.Diagnostics;
 using Asionyx.Services.Deployment.Services;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using System.IO;
+using System.Runtime.InteropServices;
 using NLog.Web;
 
 var builder = Host.CreateDefaultBuilder(args)
@@ -31,12 +34,66 @@ var builder = Host.CreateDefaultBuilder(args)
             services.AddOptions();
             services.AddDataProtection();
             services.AddSingleton<IApiKeyService, ApiKeyService>();
+            // Register diagnostics writer. Directory can be overridden with ASIONYX_DIAG_DIR.
+            services.AddSingleton<IAppDiagnostics>(sp =>
+            {
+                var useStdout = Environment.GetEnvironmentVariable("ASIONYX_DIAG_TO_STDOUT");
+                if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+                {
+                    return new ConsoleDiagnostics();
+                }
+
+                var env = Environment.GetEnvironmentVariable("ASIONYX_DIAG_DIR");
+                string dir;
+                if (!string.IsNullOrWhiteSpace(env)) dir = env!;
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) dir = Path.Combine(Path.GetTempPath(), "asionyx", "diagnostics");
+                else dir = "/var/asionyx/diagnostics";
+                return new FileDiagnostics(dir);
+            });
         });
 
         webBuilder.Configure((ctx, app) =>
         {
             var env = ctx.HostingEnvironment;
             if (env.IsDevelopment()) app.UseDeveloperExceptionPage();
+
+            // Exception-logging middleware: capture unhandled exceptions and persist
+            // a diagnostics JSON file for post-mortem inspection.
+            app.Use(async (context, next) =>
+            {
+                try
+                {
+                    await next();
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        var diag = context.RequestServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
+                        if (diag != null)
+                        {
+                            var name = $"exception_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
+                            var diagObj = new
+                            {
+                                Timestamp = DateTime.UtcNow,
+                                Exception = ex.ToString(),
+                                Path = context.Request?.Path.Value,
+                                Method = context.Request?.Method,
+                                Headers = context.Request?.Headers
+                            };
+                            await diag.WriteAsync(name, diagObj);
+                        }
+                    }
+                    catch
+                    {
+                        // Swallow diagnostics errors to avoid masking the original exception
+                    }
+
+                    context.Response.StatusCode = 500;
+                    context.Response.ContentType = "application/json; charset=utf-8";
+                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "internal" }));
+                }
+            });
 
             // API Key enforcement uses the IApiKeyService
             var apiKeyService = app.ApplicationServices.GetService(typeof(IApiKeyService)) as IApiKeyService;

@@ -40,6 +40,8 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   - When running in the provided Docker integration image we emulate systemd using the `Asionyx.Services.Deployment.SystemD` emulator. (IMPLEMENTED)
   - On startup the service attempts to invoke the systemd emulator CLI to start `Asionyx.Services.HelloWorld`. (IMPLEMENTED)
 
+  - Diagnostics: a lightweight in-process diagnostics writer that persists structured JSON files for post-mortem inspection (e.g. `/var/asionyx/diagnostics/<name>.json`). This will be provided as an `IAppDiagnostics` and `FileDiagnostics` implementation that uses `Newtonsoft.Json` and atomic file writes. (PENDING)
+
 - Asionyx.Library.Shared
   - Shared helper code. (PRESENT)
 
@@ -74,7 +76,7 @@ CI
 - Docker image build updated to use official Microsoft images (`mcr.microsoft.com/dotnet/sdk:9.0` and `mcr.microsoft.com/dotnet/aspnet:9.0`) to avoid apt dependency issues. (IMPLEMENTED)
 - The image sets `ASPNETCORE_URLS=http://+:5000` so the deployment service listens on port 5000 inside the container. (IMPLEMENTED)
 - `Asionyx.Services.Deployment.Docker/entrypoint.sh` line endings are normalized inside the image to avoid shebang CRLF errors on Linux. (IMPLEMENTED)
-- the CI progress should: (PENDING)
+  - the CI progress should: (PENDING)
 
 - Build policy: the container image must NOT build the solution inside the image. The repository `orchestrate.ps1` (or CI job) must perform a full `dotnet restore` / `dotnet build` / `dotnet publish` outside the image and the Dockerfile should copy only the published output into a minimal runtime image. (PENDING)
 
@@ -89,9 +91,29 @@ add: services.AddControllers().AddNewtonsoftJson(...) in Program.cs. (IMPLEMENTE
 fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and can be resolved by updating/removing that package reference. (PENDING)
 wire MVC-formatting globally to Newtonsoft for consistent controller serialization:
 Add AddControllers().AddNewtonsoftJson(...) and verify controllers behavior. (IMPLEMENTED)
-sweep the repo for any remaining System.Text.Json usages and convert them to Newtonsoft. (IMPLEMENTED — only build artifacts contain System.Text.Json; source code uses Newtonsoft where needed)
+sweep the repo for any remaining JSON serializer usages and prefer `Newtonsoft.Json` for controller and diagnostics serialization. (IMPLEMENTED)
 run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will rebuild images and run tests). (PENDING)
 
 
 
 ```
+testing requirements and workflow:
+
+Asionyx.Services.Deployment.Docker - this creates a docker image (i'll call it the intergration test container) that only contains -
+    - the published output of Asionyx.Services.Deployment. this is the docker container entrypoint. 
+    - the published output of Asionyx.Services.Deployment.SystemD. it should be installed into the container, but should not be started as a seperate background process to Asionyx.Services.Deployment. it should be called by command line only from Asionyx.Services.Deployment to a) create a unit file for Asionyx.Services.HelloWorld. and b) configure the Asionyx.Services.HelloWorld service and start it. so that we can integration test adding/removing/starting/stopping systemd services.
+    - the published output Asionyx.Services.HelloWorld. 
+
+The integration test sequence should be:
+    - the orchestration script runs.
+    - it publishes the contents of Asionyx.Services.Deployment, Asionyx.Services.Deployment.SystemD and Asionyx.Services.Deployment.Client to a publish folder.
+    - the integration test docker image is built. the contents of the 3 published folders only is copied into the container. 
+    - the integration tests run. 
+    - the integration test container is started using testcontainers.
+    - Asionyx.Services.Deployment adds a new service called Asionyx.Services.HelloWorld using the Asionyx.Services.Deployment.SystemD CLI tool - it creates Asionyx.Services.Helloworld by creating a new systemd unit file and then calling Asionyx.Services.Deployment.SystemD to start it. 
+    the Asionyx.Services.Hello work exposes an API endpoint - /info that we use to confirm the container has started. 
+    the container is considered ready when we can call the /info endpoint.
+    during the integration tests we should also call the /info endpoint of the deployment service named Asionyx.Services.Deployment to confirm it is also running. but this is not a requirement for the container ready section in the testcontainers startup.
+    finally we remove the Asionyx.Services.HelloWorld service using Asionyx.Services.Deployment.SystemD CLI tool.
+    the integration tests confirm that the service has been removed.
+The orchestration script should clean up all published folders and docker images after the tests are complete.

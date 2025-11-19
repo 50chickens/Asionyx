@@ -1,4 +1,6 @@
 using Asionyx;
+using Asionyx.Library.Shared.Diagnostics;
+using System.Runtime.InteropServices;
 
 // Minimal CLI-only systemd emulator for integration tests.
 // - No TCP or sockets.
@@ -9,8 +11,55 @@ using Asionyx;
 
 var UnitsDir = Path.Combine(Directory.GetCurrentDirectory(), "units");
 var RuntimeDir = Path.Combine(Directory.GetCurrentDirectory(), "runtime");
+var LogsDir = Path.Combine(Directory.GetCurrentDirectory(), "logs");
 Directory.CreateDirectory(UnitsDir);
 Directory.CreateDirectory(RuntimeDir);
+Directory.CreateDirectory(LogsDir);
+
+// Diagnostics writer for systemd emulator. Use environment override if present.
+IAppDiagnostics? diag = null;
+IAppDiagnostics? diagAlt = null;
+try
+{
+    var useStdout = Environment.GetEnvironmentVariable("ASIONYX_DIAG_TO_STDOUT");
+    if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+    {
+        diag = new ConsoleDiagnostics();
+        diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+    }
+    else
+    {
+        var env = Environment.GetEnvironmentVariable("ASIONYX_DIAG_DIR");
+        string targetDir = !string.IsNullOrWhiteSpace(env) ? env! : LogsDir;
+        diag = new FileDiagnostics(targetDir);
+        diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+    }
+
+    // Also attempt to write to container-wide diagnostics path used by orchestrator
+    try
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var alt = "/var/asionyx/diagnostics";
+            Directory.CreateDirectory(alt);
+            if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+            {
+                diagAlt = new ConsoleDiagnostics();
+                diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+            }
+            else
+            {
+                diagAlt = new FileDiagnostics(alt);
+                diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+            }
+        }
+    }
+    catch { }
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"Failed to initialise diagnostics: {ex.Message}");
+}
 
 if (args.Length == 0)
 {
@@ -36,6 +85,18 @@ try
 }
 catch (Exception ex)
 {
+    try
+    {
+        if (diag != null)
+        {
+            diag.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() }).GetAwaiter().GetResult();
+        }
+        if (diagAlt != null)
+        {
+            diagAlt.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() }).GetAwaiter().GetResult();
+        }
+    }
+    catch { }
     Console.Error.WriteLine($"Error: {ex.Message}");
     return 3;
 }
@@ -121,7 +182,10 @@ int StartUnit(string[] parts)
         var dllPath = Path.Combine("/app", folder, parts[0] + ".dll");
         if (!File.Exists(dllPath))
         {
-            Console.Error.WriteLine($"Executable not found: {dllPath}");
+            var msg = $"Executable not found: {dllPath}";
+            Console.Error.WriteLine(msg);
+            try { diag?.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }).GetAwaiter().GetResult(); } catch { }
+            try { diagAlt?.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }).GetAwaiter().GetResult(); } catch { }
             return 1;
         }
         exec = $"dotnet {dllPath}";

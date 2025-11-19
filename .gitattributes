@@ -1,7 +1,7 @@
 # Enforce LF for shell scripts and source files
 *.sh text eol=lf
 *.ps1 text eol=crlf
-*.cs text eol=lf
-*.csproj text eol=lf
-*.sln text eol=lf
-*.md text eol=lf
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+*.md text eol=crlf
