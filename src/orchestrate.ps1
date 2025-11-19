@@ -76,9 +76,24 @@ $env:API_KEY = $apiKey
 # Run integration tests (client tests expect endpoint at localhost:5000)
 dotnet test Asionyx.Services.Deployment.Client.Tests -c Release --no-build
 dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
+try {
+    # Tear down container
+    Write-Host "Stopping container..." -ForegroundColor Green
+    docker rm -f asionyx_local | Out-Null
 
-# Tear down
-Write-Host "Stopping container..." -ForegroundColor Green
-docker rm -f asionyx_local | Out-Null
+    # Remove the local image created for the test run to keep CI/host clean
+    Write-Host "Removing local docker image asionyx/deployment:local..." -ForegroundColor Green
+    docker rmi -f asionyx/deployment:local | Out-Null
 
-Write-Host "Orchestration complete." -ForegroundColor Green
+    # Clean up publish artifacts
+    if (Test-Path $publishRoot) {
+        Write-Host "Cleaning up publish folder $publishRoot" -ForegroundColor Green
+        Remove-Item $publishRoot -Recurse -Force
+    }
+
+    Write-Host "Orchestration complete." -ForegroundColor Green
+}
+catch {
+    Write-Host "Cleanup failed: $_" -ForegroundColor Yellow
+    exit 0
+}
