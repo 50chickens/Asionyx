@@ -9,7 +9,7 @@ an integration test.
 the Asionyx.Services.Deployment.Client has a corrosponding option to call the api endpoint on the Asionyx.Services.Deployment service.
 
  - Asionyx.Services.Deployment (PRESENT)
-  - net9.0 Kestrel web service hosting API endpoints for local machine configuration. (IMPLEMENTED)
+  - net10.0 Kestrel web service hosting API endpoints for local machine configuration. (IMPLEMENTED)
     - it has following endpoints (IMPLEMENTED)
       - /info. returns application version based on assembly version. (IMPLEMENTED)
       - /status. returns 200 OK if 
