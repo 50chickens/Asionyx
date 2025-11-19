@@ -1,79 +1,109 @@
 # Asionyx Coding Guidelines (C# / .NET)
 
-This document supplements `.editorconfig` with team-level conventions and rationale. It is intentionally pragmatic and focuses on things we care about for this project (services running on Linux).
+This document supplements `.editorconfig` with team-level conventions and rationale. It is pragmatic and focused on building small, testable .NET services that run reliably in containers.
 
 ## Goals
 
 - Predictable, readable C# code.
 - Consistent formatting across editors and CI.
-- Favor small, testable services with clear DI boundaries.
-- Keep container images small and reproducible.
+- Small, testable services with clear DI boundaries.
+- Small, reproducible container images.
 
-## Formatting / tooling
+## Formatting & Tooling
 
-- Use `.editorconfig` rules. Run `dotnet format` during development and in CI.
-- Use Roslyn analyzers and StyleCop (configured in `Directory.Build.props`) for consistent code quality.
+- Commit an `.editorconfig` and run `dotnet format` locally and in CI (`--verify-no-changes` for checks).
+- Enable Roslyn analyzers and Style/StyleCop rules via `Directory.Build.props` and make analyzer warnings visible in CI.
 
-## Project structure
+## Project Structure
 
-- Keep service projects small and focused. `Asionyx.Services.Deployment` should only host API/controller logic and delegate system operations to `ISystemConfigurator` implementations in `Asionyx.Library.Core` or `Asionyx.Library.Shared`.
-- Tests go in `*.Tests` projects alongside the code they exercise.
+- Keep service projects small and focused. Controllers belong in service projects; system operations belong behind `ISystemConfigurator` implementations in library projects.
+- Tests live in `*.Tests` projects next to the code they exercise.
 
 ## API Controllers
 
-- Keep controllers thin: validate input, map to domain/service calls, return appropriate status codes.
-- Use explicit model DTOs for requests/responses. Avoid returning internal domain objects from controllers.
-- Endpoints should use RESTful verbs where possible.
+- Keep controllers thin: validate inputs, map to services, and return appropriate HTTP status codes.
+- Use explicit DTOs for requests/responses; do not return internal domain objects directly from controllers.
+- Prefer RESTful verbs and sensible status codes.
 
-Recommended endpoints (examples for `Asionyx.Services.Deployment`):
-- `GET /info` — service metadata (version, environment)
-- `GET /status` — simple health/status check (200 OK if the service is healthy)
-- `POST /systemd` — manage systemd services (body contains { action: "start"|"stop"|"status", name: "..." }) — keep this behind appropriate auth in production
+Recommended endpoints (examples):
+- `GET /info` — service metadata (version, environment).
+- `GET /status` — health/status check (200 OK when healthy).
+- `POST /systemd` — manage systemd units (authorized in production).
 
-## Logging and Errors
+## Logging & Errors
 
-- Use structured logging (ILogger) and include context (request id, service name).
-- Do not swallow exceptions silently. Log at appropriate levels and return a meaningful HTTP status.
+- Use structured logging (`ILogger<T>`) and include contextual properties (request id, correlation id, environment).
+- Do not swallow exceptions; log at correct levels and map errors to meaningful HTTP responses.
 
-## Dependency injection
+## Dependency Injection
 
-- Register interfaces with small lifetime surface. Use `Singleton` for long-lived services (like system configurator), `Scoped` for request-scoped, `Transient` for lightweight ephemeral services.
+- Register services with appropriate lifetimes: `Singleton` for long-lived platform services, `Scoped` for per-request services, `Transient` for lightweight stateless services.
+- Avoid global mutable state; favor DI and small interfaces.
 
-## System-level operations
+## System Operations
 
-- System operations (service management, package install, file writes) should be behind `ISystemConfigurator` so they can be replaced by emulators in tests (the `SystemD` emulator project is an example).
-- Avoid running operations as root in tests; use emulators and mocks where possible.
+- Encapsulate system-level actions (service control, file writes, package installs) behind `ISystemConfigurator` so tests can use emulators.
+- In tests, prefer emulators/mocks — avoid running destructive operations as root.
 
 ## Docker
 
-- Use official `mcr.microsoft.com/dotnet` images for build and runtime to improve reproducibility.
-- Expose only necessary ports and set `ASPNETCORE_URLS` to listen on the proper port (`http://+:5000`).
-- Normalize line endings for shell scripts to `LF` and mark them executable.
+- Use official `mcr.microsoft.com/dotnet` base images for SDK/runtime to improve reproducibility.
+- Expose only necessary ports and set `ASPNETCORE_URLS` to `http://+:5000` when appropriate.
+- Normalize line endings to `LF` for shell scripts and ensure they are executable.
 
 ## Tests
 
-- Unit tests should be fast and independent.
-- Integration tests that require Docker should be marked explicit and run by orchestrator/CI in a Docker-enabled environment.
+- Unit tests should be fast and isolated.
+- Integration tests that require Docker should be explicit and run by the orchestrator/CI in Docker-enabled runners.
 
 ## Security
 
-- Don’t commit secrets. Use environment variables or other secret stores for credentials.
+- Never commit secrets. Use environment variables or platform secret stores.
+- Store any persisted secrets encrypted at rest (use ASP.NET Core Data Protection or a secrets manager).
 
-## Useful commands
+## Practical Techniques
+
+- Use POCO/DTO types for command and API models rather than positional `string[]` arguments.
+- Prefer typed configuration objects and `IOptions<T>` for settings.
+- Make long-running entry points async: `static async Task<int> Main(string[] args)`.
+- Encapsulate side-effects (file IO, process invocation) behind interfaces so tests can replace them with in-memory implementations.
+- Return structured `CommandResult` objects from helper libraries instead of raw exit codes.
+- Use `ProcessStartInfo` with `ArgumentList`/timeouts and `CancellationToken` for external commands.
+- Use safe, atomic file writes (write temp file, then move/rename).
+- Validate inputs and sanitize any values used in file paths.
+
+### String Parsing
+
+- Prefer structured parsers or `TryParse` patterns over ad-hoc `Split` and index access.
+- Use `Span<char>`/`ReadOnlySpan<char>` for high-performance parsing in hot paths.
+- When using `Regex` on user input, set timeouts and prefer compiled regexes only for hot paths.
+
+## Conventions Summary
+
+- `PascalCase` for public types and methods; `camelCase` for parameters and locals.
+- Async methods end with `Async`.
+- Prefer nullable annotations (`#nullable enable`) and modern C# features.
+
+## CI & Hygiene
+
+- CI should run `dotnet format`, analyzers, build, and tests on push/PR.
+- Avoid committing `bin/` or `obj/`; ensure `.gitignore` excludes them.
+
+## Useful Commands
 
 - Format: `dotnet format`
 - Restore: `dotnet restore` or `dotnet restore Asionyx.sln`
 - Build: `dotnet build -c Release`
 - Test: `dotnet test -c Release`
 
-## Conventions summary
+---
 
-- Naming: `PascalCase` for public types and methods; `camelCase` for method parameters and local variables.
-- Async methods should have `Async` suffix.
-- Avoid global state; prefer DI for dependencies.
+If you'd like, I can also:
 
+- Commit and push this cleaned `docs/CODING_GUIDELINES.md` now.
+- Make a small change to `Directory.Build.props` to centralize analyzer/version settings and run a quick build to verify.
 
-
+Tell me which of those follow-ups to run next, or I can proceed to commit & push the doc change now.
 # Asionyx Coding Guidelines (C# / .NET)
 
 This document supplements .editorconfig with team-level conventions and rationale. It is intentionally pragmatic and focuses on things we care about for this project (services running on Linux).
