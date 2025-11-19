@@ -122,17 +122,27 @@ var appHost = builder.Build();
 // On startup, attempt to start HelloWorld service via the systemd emulator CLI if available
 try
 {
-    var systemdCli = Environment.GetEnvironmentVariable("ASIONYX_SYSTEMD_CLI") ?? "../Asionyx.Services.Deployment.SystemD/Asionyx.Services.Deployment.SystemD";
-    // Try to run CLI: start Asionyx.Services.HelloWorld
-    var pi = new System.Diagnostics.ProcessStartInfo(systemdCli, "start Asionyx.Services.HelloWorld") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-    var p = System.Diagnostics.Process.Start(pi);
-    if (p != null)
+    // Prefer the installed CLI path inside the container. Do NOT rely on environment variables (tests should only use API_KEY).
+    var containerCli = "/app/systemd/Asionyx.Services.Deployment.SystemD";
+    var systemdCli = File.Exists(containerCli) ? containerCli : "../Asionyx.Services.Deployment.SystemD/Asionyx.Services.Deployment.SystemD";
+
+    if (File.Exists(systemdCli))
     {
-        var outp = p.StandardOutput.ReadToEndAsync();
-        var err = p.StandardError.ReadToEndAsync();
-        p.WaitForExit(2000);
-        if (!p.HasExited) p.Kill();
-        Console.WriteLine($"systemd-cli output: {outp.Result}");
+        // Try to run CLI: start Asionyx.Services.HelloWorld
+        var pi = new System.Diagnostics.ProcessStartInfo(systemdCli, "start Asionyx.Services.HelloWorld") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var p = System.Diagnostics.Process.Start(pi);
+        if (p != null)
+        {
+            var outp = p.StandardOutput.ReadToEndAsync();
+            var err = p.StandardError.ReadToEndAsync();
+            p.WaitForExit(2000);
+            if (!p.HasExited) p.Kill();
+            Console.WriteLine($"systemd-cli output: {outp.Result}");
+        }
+    }
+    else
+    {
+        Console.WriteLine("systemd CLI not found in-container or at fallback path; skipping HelloWorld auto-start");
     }
 }
 catch (Exception ex)

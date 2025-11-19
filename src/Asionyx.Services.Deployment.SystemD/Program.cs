@@ -1,95 +1,275 @@
-using System.Net.Sockets;
-using System.Text;
+using System;
+using Asionyx;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net;
+using System.IO;
+using System.Linq;
 
-// Simple systemd-like emulator.
-// If invoked with args (e.g. `start <name>`) it will act as a CLI client and send the command to the daemon.
-// If invoked with no args it will run as a daemon listening on 127.0.0.1:6000 and manage processes.
+// Minimal CLI-only systemd emulator for integration tests.
+// - No TCP or sockets.
+// - Assumes any managed application is a .NET application and will be launched via `dotnet <dll>`.
+// - Unit files may be placed in `units/` (relative to CWD). If a unit file contains [Service]ExecStart it will be used verbatim.
+// - If no unit file is present, the emulator will map a service name like `Asionyx.Services.HelloWorld` to
+//   `/app/<shortname>/<fullname>.dll` and launch it via `dotnet /app/<shortname>/<fullname>.dll`.
 
-const int Port = 6000;
+var UnitsDir = Path.Combine(Directory.GetCurrentDirectory(), "units");
+var RuntimeDir = Path.Combine(Directory.GetCurrentDirectory(), "runtime");
+Directory.CreateDirectory(UnitsDir);
+Directory.CreateDirectory(RuntimeDir);
 
-if (args.Length > 0)
+if (args.Length == 0)
 {
-    // CLI mode: send args to daemon
-    var cmd = string.Join(' ', args);
+    PrintHelp();
+    return 0;
+}
+
+var cmd = args[0].ToLowerInvariant();
+if (cmd == "help") { PrintHelp(); return 0; }
+try
+{
+    return cmd switch
+    {
+        "add" => AddUnit(args.Skip(1).ToArray()),
+        "remove" => RemoveUnit(args.Skip(1).ToArray()),
+        "start" => StartUnit(args.Skip(1).ToArray()),
+        "stop" => StopUnit(args.Skip(1).ToArray()),
+        "status" => StatusUnit(args.Skip(1).ToArray()),
+        "daemon-reload" or "daemon_reload" or "daemonreload" => DaemonReload(),
+        "help" => 0,
+        _ => UnknownCommand(cmd)
+    };
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"Error: {ex.Message}");
+    return 3;
+}
+
+int UnknownCommand(string c)
+{
+    Console.Error.WriteLine($"Unknown command: {c}");
+    PrintHelp();
+    return 2;
+}
+
+int AddUnit(string[] parts)
+{
+    if (parts.Length == 0)
+    {
+        Console.Error.WriteLine("add requires a source file path or a unit name (with content via stdin)");
+        return 2;
+    }
+    var source = parts[0];
+    if (File.Exists(source))
+    {
+        var dest = Path.Combine(UnitsDir, Path.GetFileName(source));
+        File.Copy(source, dest, overwrite: true);
+        Console.WriteLine($"added unit: {Path.GetFileName(dest)}");
+        return 0;
+    }
+    var unitName = source.EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? source : source + ".service";
+    var destPath = Path.Combine(UnitsDir, unitName);
+    using var stdin = Console.OpenStandardInput();
+    using var sr = new StreamReader(stdin);
+    var content = sr.ReadToEnd();
+    if (string.IsNullOrWhiteSpace(content))
+    {
+        Console.Error.WriteLine("No unit file content provided on stdin.");
+        return 2;
+    }
+    File.WriteAllText(destPath, content);
+    Console.WriteLine($"added unit: {unitName}");
+    return 0;
+}
+
+int RemoveUnit(string[] parts)
+{
+    if (parts.Length == 0)
+    {
+        Console.Error.WriteLine("remove requires a unit name");
+        return 2;
+    }
+    var unitName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0] : parts[0] + ".service";
+    var path = Path.Combine(UnitsDir, unitName);
+    if (!File.Exists(path))
+    {
+        Console.Error.WriteLine($"unit not found: {unitName}");
+        return 1;
+    }
+    File.Delete(path);
+    Console.WriteLine($"removed unit: {unitName}");
+    return 0;
+}
+
+int StartUnit(string[] parts)
+{
+    if (parts.Length == 0)
+    {
+        Console.Error.WriteLine("start requires a unit name");
+        return 2;
+    }
+    var unitName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0] : parts[0] + ".service";
+    var unitPath = Path.Combine(UnitsDir, unitName);
+
+    string? exec = null;
+    if (File.Exists(unitPath))
+    {
+        var unit = ParseUnitFile(unitPath);
+        if (unit.TryGetValue("Service", out var svc) && svc.TryGetValue("ExecStart", out var ex)) exec = ex;
+    }
+
+    if (string.IsNullOrWhiteSpace(exec))
+    {
+        // Map service name to /app/<short>/<fullname>.dll and run `dotnet <dll>`
+        var shortName = parts[0].Split('.').Last();
+        var folder = shortName.ToLowerInvariant();
+        var dllPath = Path.Combine("/app", folder, parts[0] + ".dll");
+        if (!File.Exists(dllPath))
+        {
+            Console.Error.WriteLine($"Executable not found: {dllPath}");
+            return 1;
+        }
+        exec = $"dotnet {dllPath}";
+    }
+
+    // Use the SystemdService implementation to start the service
+    var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
+    var settings = new SystemdServiceSettings();
+    var sd = new SystemdService(svcName, settings);
+    var started = sd.StartAsync().GetAwaiter().GetResult();
+    return started ? 0 : 3;
+}
+
+int StopUnit(string[] parts)
+{
+    if (parts.Length == 0)
+    {
+        Console.Error.WriteLine("stop requires a unit name");
+        return 2;
+    }
+    var unitName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0] : parts[0] + ".service";
+    var pidFile = Path.Combine(RuntimeDir, unitName + ".pid");
+    if (!File.Exists(pidFile))
+    {
+        Console.WriteLine($"{unitName} not running");
+        return 1;
+    }
     try
     {
-        using var client = new TcpClient();
-        client.Connect(IPAddress.Loopback, Port);
-        var stream = client.GetStream();
-        var data = Encoding.UTF8.GetBytes(cmd + "\n");
-        stream.Write(data, 0, data.Length);
-        using var sr = new StreamReader(stream, Encoding.UTF8);
-        var resp = sr.ReadToEnd();
-        Console.Write(resp);
-        Environment.Exit(0);
+        var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
+        var settings = new SystemdServiceSettings();
+        var sd = new SystemdService(svcName, settings);
+        var stopped = sd.StopAsync().GetAwaiter().GetResult();
+        return stopped ? 0 : 3;
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"Failed to send command to systemd emulator: {ex.Message}");
-        Environment.Exit(2);
+        Console.Error.WriteLine($"failed to stop {unitName}: {ex.Message}");
+        return 3;
     }
 }
 
-// Daemon mode
-var listener = new TcpListener(IPAddress.Loopback, Port);
-listener.Start();
-Console.WriteLine($"SystemD emulator listening on 127.0.0.1:{Port}");
-
-var services = new Dictionary<string, Process>(StringComparer.OrdinalIgnoreCase);
-
-_ = Task.Run(async () =>
+int StatusUnit(string[] parts)
 {
-    while (true)
+    if (parts.Length == 0)
     {
-        var client = await listener.AcceptTcpClientAsync();
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var stream = client.GetStream();
-                using var sr = new StreamReader(stream, Encoding.UTF8);
-                using var sw = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-                var line = await sr.ReadLineAsync();
-                if (string.IsNullOrWhiteSpace(line)) return;
-                var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-                var cmd = parts[0].ToLowerInvariant();
-                var name = parts.Length > 1 ? parts[1] : string.Empty;
-
-                switch (cmd)
-                {
-                    case "start":
-                        if (services.ContainsKey(name)) { await sw.WriteLineAsync($"{name} already running"); break; }
-                        // map service name to published path: use last token as folder name lowercased
-                        var shortName = name.Split('.').Last();
-                        var folder = shortName.ToLowerInvariant();
-                        var exe = $"/app/{folder}/{name}";
-                        if (!File.Exists(exe)) { await sw.WriteLineAsync($"Executable not found: {exe}"); break; }
-                        var pstart = new ProcessStartInfo(exe) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-                        var proc = Process.Start(pstart)!;
-                        services[name] = proc;
-                        await sw.WriteLineAsync($"started {name} (pid {proc.Id})");
-                        break;
-                    case "stop":
-                        if (!services.TryGetValue(name, out var p)) { await sw.WriteLineAsync($"{name} not running"); break; }
-                        try { p.Kill(); await sw.WriteLineAsync($"stopped {name}"); }
-                        catch (Exception ex) { await sw.WriteLineAsync($"failed to stop {name}: {ex.Message}"); }
-                        services.Remove(name);
-                        break;
-                    case "status":
-                        if (services.TryGetValue(name, out var sproc) && !sproc.HasExited) await sw.WriteLineAsync($"{name} running (pid {sproc.Id})"); else await sw.WriteLineAsync($"{name} not running");
-                        break;
-                    default:
-                        await sw.WriteLineAsync($"unknown command: {cmd}");
-                        break;
-                }
-            }
-            catch { }
-            finally { client.Close(); }
-        });
+        Console.Error.WriteLine("status requires a unit name");
+        return 2;
     }
-});
+    var unitName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0] : parts[0] + ".service";
+    var pidFile = Path.Combine(RuntimeDir, unitName + ".pid");
+    if (!File.Exists(pidFile))
+    {
+        Console.WriteLine($"{unitName} not running");
+        return 3;
+    }
+    try
+    {
+        var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
+        var settings = new SystemdServiceSettings();
+        var sd = new SystemdService(svcName, settings);
+        var status = sd.GetStatusAsync().GetAwaiter().GetResult();
+        if (status == SystemdService.ServiceStatus.Active)
+        {
+            Console.WriteLine($"{unitName} running");
+            return 0;
+        }
+        else
+        {
+            Console.WriteLine($"{unitName} not running");
+            return 3;
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"status check failed for {unitName}: {ex.Message}");
+        return 4;
+    }
+}
 
-// keep daemon alive
-await Task.Delay(Timeout.Infinite);
+int DaemonReload()
+{
+    var units = Directory.GetFiles(UnitsDir, "*.service").Select(Path.GetFileName).ToArray();
+    Console.WriteLine($"Daemon reloaded. {units.Length} unit(s) available.");
+    foreach (var u in units) Console.WriteLine($" - {u}");
+    return 0;
+}
+
+void PrintHelp()
+{
+    Console.WriteLine("Asionyx systemd emulator - minimal drop-in for systemctl usage in tests");
+    Console.WriteLine();
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  add <path-to-unit-file>        - copy unit file into units/ or use a unit name and provide content via stdin");
+    Console.WriteLine("  remove <unit>                 - remove unit file from units/");
+    Console.WriteLine("  start <unit>                  - start unit (reads ExecStart from unit file or launches dotnet /app/<short>/<fullname>.dll)");
+    Console.WriteLine("  stop <unit>                   - stop unit (kills PID from runtime/<unit>.pid)");
+    Console.WriteLine("  status <unit>                 - check unit status");
+    Console.WriteLine("  daemon-reload                  - reload unit files from disk (no-op for file-driven emulator)");
+}
+
+Dictionary<string, Dictionary<string, string>> ParseUnitFile(string path)
+{
+    var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+    var lines = File.ReadAllLines(path);
+    string? section = null;
+    foreach (var raw in lines)
+    {
+        var line = raw.Trim();
+        if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#") || line.StartsWith(";")) continue;
+        if (line.StartsWith("[") && line.EndsWith("]"))
+        {
+            section = line.Substring(1, line.Length - 2).Trim();
+            result[section] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            continue;
+        }
+        if (section == null) continue;
+        var idx = line.IndexOf('=');
+        if (idx <= 0) continue;
+        var key = line.Substring(0, idx).Trim();
+        var val = line.Substring(idx + 1).Trim();
+        result[section][key] = val;
+    }
+    return result;
+
+    static (string file, string args) SplitExecStart(string execStart)
+    {
+        var trimmed = execStart.Trim();
+        if (trimmed.Length > 0 && trimmed[0] == '-') trimmed = trimmed.Substring(1).TrimStart();
+        if (trimmed.StartsWith("\""))
+        {
+            var end = trimmed.IndexOf('"', 1);
+            if (end > 1)
+            {
+                var file = trimmed.Substring(1, end - 1);
+                var args = trimmed.Substring(end + 1).Trim();
+                return (file, args);
+            }
+        }
+        var firstSpace = trimmed.IndexOf(' ');
+        if (firstSpace <= 0) return (trimmed, string.Empty);
+        var f = trimmed.Substring(0, firstSpace);
+        var a = trimmed.Substring(firstSpace + 1).Trim();
+        return (f, a);
+    }
+}

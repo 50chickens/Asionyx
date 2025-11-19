@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using System.Net.Sockets;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 
 namespace Asionyx.Services.Deployment.Controllers;
@@ -14,8 +15,8 @@ public class SystemdRequest
 [Route("[controller]")]
 public class SystemdController : ControllerBase
 {
-    private const string Host = "127.0.0.1";
-    private const int Port = 6000;
+    // Prefer the in-container installed CLI path; fall back to repo-relative CLI for local dev
+    private static readonly string InContainerCli = "/app/systemd/Asionyx.Services.Deployment.SystemD";
 
     [HttpPost]
     public async Task<IActionResult> Post([FromBody] SystemdRequest req)
@@ -26,16 +27,33 @@ public class SystemdController : ControllerBase
         var cmd = $"{req.Action} {req.Name}";
         try
         {
-            using var client = new TcpClient();
-            await client.ConnectAsync(Host, Port);
-            var stream = client.GetStream();
-            var data = Encoding.UTF8.GetBytes(cmd + "\n");
-            await stream.WriteAsync(data, 0, data.Length);
-            using var sr = new StreamReader(stream, Encoding.UTF8);
-            // give the emulator a moment to respond
-            await Task.Delay(100);
-            var resp = await sr.ReadToEndAsync();
-            return Ok(new { command = cmd, result = resp.Trim() });
+            var cli = InContainerCli;
+            if (!System.IO.File.Exists(cli))
+            {
+                // fallback for local development
+                cli = Path.Combine(Directory.GetCurrentDirectory(), "..", "Asionyx.Services.Deployment.SystemD", "Asionyx.Services.Deployment.SystemD");
+            }
+
+            if (!System.IO.File.Exists(cli))
+                return StatusCode(500, new { error = "SystemD CLI not found in-container or at fallback path" });
+
+            var psi = new ProcessStartInfo(cli, cmd)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc == null) return StatusCode(500, new { error = "Failed to start systemd CLI" });
+
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+            var stderrTask = proc.StandardError.ReadToEndAsync();
+            await Task.WhenAll(stdoutTask, stderrTask);
+            proc.WaitForExit(5000);
+
+            return Ok(new { command = cmd, stdout = stdoutTask.Result.Trim(), stderr = stderrTask.Result.Trim(), exitCode = proc.ExitCode });
         }
         catch (Exception ex)
         {

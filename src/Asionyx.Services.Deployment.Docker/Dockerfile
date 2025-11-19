@@ -2,7 +2,7 @@
 # Use Debian Trixie and avoid Microsoft container images; install dotnet packages from Microsoft feed instead
 
 ## Use official Microsoft .NET SDK and ASP.NET runtime images to avoid manual apt setup
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS builder
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS builder
 WORKDIR /src
 
 # Copy repository and publish projects using the official SDK image
@@ -11,7 +11,7 @@ RUN dotnet publish Asionyx.Services.Deployment -c Release -o /app/deployment
 RUN dotnet publish Asionyx.Services.Deployment.SystemD -c Release -o /app/systemd
 RUN dotnet publish Asionyx.Services.HelloWorld -c Release -o /app/helloworld
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
 # Copy published outputs from builder
