@@ -51,3 +51,4 @@ DesignTimeBuild
 *.trx
 coverage.cobertura.xml
 coverage-report
+src/artifacts/**

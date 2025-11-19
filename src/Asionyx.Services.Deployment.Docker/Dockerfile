@@ -13,6 +13,10 @@ WORKDIR /app
 # Copy published outputs from build context (created by orchestrator)
 COPY publish/deployment ./deployment
 COPY publish/systemd ./systemd
+# Also install the self-contained SystemD executable into /usr/local/bin so
+# the deployment service can invoke it directly without fallbacks.
+COPY publish/systemd/ /usr/local/bin/
+RUN chmod +x /usr/local/bin/Asionyx.Services.Deployment.SystemD || true
 COPY publish/helloworld ./helloworld
 
 # Copy entrypoint script (from repo path relative to build context)

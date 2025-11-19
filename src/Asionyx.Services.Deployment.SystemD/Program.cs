@@ -16,21 +16,35 @@ Directory.CreateDirectory(UnitsDir);
 Directory.CreateDirectory(RuntimeDir);
 Directory.CreateDirectory(LogsDir);
 
-// Diagnostics writer for systemd emulator. Use environment override if present.
+// Diagnostics writer for systemd emulator. Use configuration file `appsettings.json` if present.
 IAppDiagnostics? diag = null;
 IAppDiagnostics? diagAlt = null;
 try
 {
-    var useStdout = Environment.GetEnvironmentVariable("ASIONYX_DIAG_TO_STDOUT");
-    if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+    // Read appsettings.json (if provided) and use its Diagnostics configuration.
+    string? useStdout = null;
+    string? dirCfg = null;
+    var settingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+    if (File.Exists(settingsPath))
+    {
+        try
+        {
+            var jsonText = File.ReadAllText(settingsPath);
+            var jobj = Newtonsoft.Json.Linq.JObject.Parse(jsonText);
+            useStdout = jobj.SelectToken("Diagnostics.ToStdout")?.ToString();
+            dirCfg = jobj.SelectToken("Diagnostics.Dir")?.ToString();
+        }
+        catch { }
+    }
+
+    if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
     {
         diag = new ConsoleDiagnostics();
         diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
     }
     else
     {
-        var env = Environment.GetEnvironmentVariable("ASIONYX_DIAG_DIR");
-        string targetDir = !string.IsNullOrWhiteSpace(env) ? env! : LogsDir;
+        string targetDir = !string.IsNullOrWhiteSpace(dirCfg) ? dirCfg! : LogsDir;
         diag = new FileDiagnostics(targetDir);
         diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
     }
@@ -42,7 +56,7 @@ try
         {
             var alt = "/var/asionyx/diagnostics";
             Directory.CreateDirectory(alt);
-            if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+            if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
             {
                 diagAlt = new ConsoleDiagnostics();
                 diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();

@@ -33,11 +33,37 @@ New-Item -ItemType Directory -Path (Join-Path $publishRoot 'helloworld') | Out-N
 dotnet publish Asionyx.Services.Deployment -c Release -o "$publishRoot/deployment"
 if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish deployment failed" -ForegroundColor Red; exit $LASTEXITCODE }
 
-dotnet publish Asionyx.Services.Deployment.SystemD -c Release -o "$publishRoot/systemd"
+dotnet publish Asionyx.Services.Deployment.SystemD -c Release -r linux-x64 -p:PublishSingleFile=true -p:PublishTrimmed=false --self-contained true -o "$publishRoot/systemd"
 if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish systemd failed" -ForegroundColor Red; exit $LASTEXITCODE }
 
 dotnet publish Asionyx.Services.HelloWorld -c Release -o "$publishRoot/helloworld"
 if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish helloworld failed" -ForegroundColor Red; exit $LASTEXITCODE }
+
+# Write appsettings into published outputs so runtime config does not rely on environment variables.
+Write-Host "Writing appsettings into publish outputs (Diagnostics/Testing configuration)" -ForegroundColor Green
+$deploymentSettings = @'
+{
+    "Diagnostics": {
+        "ToStdout": "true",
+        "Dir": "/var/asionyx/diagnostics"
+    },
+    "Testing": {
+        "Insecure": "true"
+    }
+}
+'@
+Set-Content -Path (Join-Path $publishRoot 'deployment' 'appsettings.json') -Value $deploymentSettings -Encoding utf8
+
+$diagSettings = @'
+{
+    "Diagnostics": {
+        "ToStdout": "true",
+        "Dir": "/var/asionyx/diagnostics"
+    }
+}
+'@
+Set-Content -Path (Join-Path $publishRoot 'systemd' 'appsettings.json') -Value $diagSettings -Encoding utf8
+Set-Content -Path (Join-Path $publishRoot 'helloworld' 'appsettings.json') -Value $diagSettings -Encoding utf8
 
 # Build docker image (explicitly target Linux platform)
 Write-Host "Building docker image asionyx/deployment:local (linux)" -ForegroundColor Green
@@ -56,15 +82,11 @@ if (docker ps -a --format '{{.Names}}' | Select-String -Pattern '^asionyx_local$
 }
 
 # Pass the API key into the container environment. Also export locally so dotnet test can read it.
+# Only set API_KEY in environment for the container. All other runtime configuration
+# should be provided via appsettings files written into the publish output.
 $env:API_KEY = $apiKey
-# Create host diagnostics directory and bind-mount it into container so diagnostics and logs survive container removal
-$diagHost = Join-Path $scriptDir 'artifacts' 'diagnostics_host'
-if (-not (Test-Path $diagHost)) { New-Item -ItemType Directory -Path $diagHost -Force | Out-Null }
-
-# Run container with diagnostics bound into /var/asionyx/diagnostics and enable stdout diagnostics
-$env:ASIONYX_DIAG_TO_STDOUT = "1"
-Write-Host "Starting container with diagnostics bind mount -> $diagHost" -ForegroundColor Yellow
-docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey -e ASIONYX_INSECURE_TESTING=1 -e ASIONYX_DIAG_TO_STDOUT=1 -v "${diagHost}:/var/asionyx/diagnostics" asionyx/deployment:local | Out-Null
+Write-Host "Starting container (configuration from appsettings)" -ForegroundColor Yellow
+docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey asionyx/deployment:local | Out-Null
 
 # wait for readiness
 $max = 60
@@ -83,15 +105,18 @@ $env:API_KEY = $apiKey
 # Run integration tests (client tests expect endpoint at localhost:5000)
 dotnet test Asionyx.Services.Deployment.Client.Tests -c Release --no-build
 dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
-# Attempt to copy diagnostics out of the running container so failures can be inspected.
-$diagHost = Join-Path $scriptDir 'artifacts' 'diagnostics_' + (Get-Date -Format 'yyyyMMddHHmmss')
+# Capture container stdout and metadata into an artifacts folder before tearing down the container.
+$diagBase = Join-Path $scriptDir 'artifacts'
+if (-not (Test-Path $diagBase)) { New-Item -ItemType Directory -Path $diagBase | Out-Null }
+$diagHost = Join-Path $diagBase ("diagnostics_{0}" -f (Get-Date -Format 'yyyyMMddHHmmss'))
 if (-not (Test-Path $diagHost)) { New-Item -ItemType Directory -Path $diagHost | Out-Null }
-Write-Host "Attempting to copy diagnostics from container to $diagHost ..." -ForegroundColor Yellow
+Write-Host "Saving container stdout logs and inspect output to $diagHost ..." -ForegroundColor Yellow
 try {
-    docker cp asionyx_local:/var/asionyx/diagnostics $diagHost 2>$null
-    Write-Host "Diagnostics copied to $diagHost" -ForegroundColor Green
+    docker logs asionyx_local 2>&1 | Out-File -FilePath (Join-Path $diagHost 'container_stdout.log') -Encoding utf8
+    docker inspect asionyx_local | Out-File -FilePath (Join-Path $diagHost 'container_inspect.json') -Encoding utf8
+    Write-Host "Logs and inspect written to $diagHost" -ForegroundColor Green
 } catch {
-    Write-Host "No diagnostics found or docker cp failed" -ForegroundColor Yellow
+    Write-Host "Failed to retrieve logs/inspect: $_" -ForegroundColor Yellow
 }
 try {
     # Tear down container

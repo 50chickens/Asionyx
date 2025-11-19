@@ -17,6 +17,8 @@ var builder = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((ctx, cfg) =>
     {
         cfg.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+        // Also attempt to read per-publish-location appsettings placed into the publish folder
+        cfg.AddJsonFile(Path.Combine("deployment", "appsettings.json"), optional: true, reloadOnChange: true);
     })
     .ConfigureWebHostDefaults(webBuilder =>
     {
@@ -34,18 +36,19 @@ var builder = Host.CreateDefaultBuilder(args)
             services.AddOptions();
             services.AddDataProtection();
             services.AddSingleton<IApiKeyService, ApiKeyService>();
-            // Register diagnostics writer. Directory can be overridden with ASIONYX_DIAG_DIR.
+            // Register diagnostics writer. Directory can be overridden via configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
             services.AddSingleton<IAppDiagnostics>(sp =>
             {
-                var useStdout = Environment.GetEnvironmentVariable("ASIONYX_DIAG_TO_STDOUT");
-                if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+                var cfg = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+                var useStdout = cfg?[("Diagnostics:ToStdout")]?.ToString();
+                if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
                 {
                     return new ConsoleDiagnostics();
                 }
 
-                var env = Environment.GetEnvironmentVariable("ASIONYX_DIAG_DIR");
+                var dirCfg = cfg?[("Diagnostics:Dir")];
                 string dir;
-                if (!string.IsNullOrWhiteSpace(env)) dir = env!;
+                if (!string.IsNullOrWhiteSpace(dirCfg)) dir = dirCfg!;
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) dir = Path.Combine(Path.GetTempPath(), "asionyx", "diagnostics");
                 else dir = "/var/asionyx/diagnostics";
                 return new FileDiagnostics(dir);
@@ -109,13 +112,18 @@ var builder = Host.CreateDefaultBuilder(args)
 
             app.Use(async (context, next) =>
             {
-                // If running in an insecure test mode (set by orchestrator/GHA), skip API key enforcement.
-                var insecure = Environment.GetEnvironmentVariable("ASIONYX_INSECURE_TESTING");
-                if (!string.IsNullOrWhiteSpace(insecure) && insecure == "1")
+                // If running in an insecure test mode (configured by appsettings), skip API key enforcement.
+                try
                 {
-                    await next();
-                    return;
+                    var cfg = app.ApplicationServices.GetService(typeof(Microsoft.Extensions.Configuration.IConfiguration)) as Microsoft.Extensions.Configuration.IConfiguration;
+                    var insecure = cfg?["Testing:Insecure"];
+                    if (!string.IsNullOrWhiteSpace(insecure) && (insecure == "1" || insecure.Equals("true", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        await next();
+                        return;
+                    }
                 }
+                catch { }
                 // Allow unauthenticated access to /info (allow trailing slash or subpaths)
                 var path = context.Request.Path.Value ?? string.Empty;
                 // Allow all GET requests to be unauthenticated to simplify integration testing in disposable containers

@@ -11,18 +11,19 @@ try
 }
 catch { /* optional: ignore if not available */ }
 
-// Register diagnostics writer. Directory can be overridden with ASIONYX_DIAG_DIR.
+// Register diagnostics writer. Directory can be overridden with configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
 builder.Services.AddSingleton<IAppDiagnostics>(sp =>
 {
-    var useStdout = Environment.GetEnvironmentVariable("ASIONYX_DIAG_TO_STDOUT");
-    if (!string.IsNullOrWhiteSpace(useStdout) && useStdout == "1")
+    var cfg = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+    var useStdout = cfg?["Diagnostics:ToStdout"];
+    if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
     {
         return new ConsoleDiagnostics();
     }
 
-    var env = Environment.GetEnvironmentVariable("ASIONYX_DIAG_DIR");
+    var dirCfg = cfg?["Diagnostics:Dir"];
     string dir;
-    if (!string.IsNullOrWhiteSpace(env)) dir = env!;
+    if (!string.IsNullOrWhiteSpace(dirCfg)) dir = dirCfg!;
     else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) dir = Path.Combine(Path.GetTempPath(), "asionyx", "diagnostics");
     else dir = "/var/asionyx/diagnostics";
     return new FileDiagnostics(dir);

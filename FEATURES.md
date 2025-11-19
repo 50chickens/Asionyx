@@ -1,3 +1,61 @@
+# Project features
+
+This file lists the features the solution is expected to provide and notes their current implementation status.
+
+for a feature to be considered implemented it needs to have -
+
+- an api endpoint that performs the operation.
+- an integration test.
+- the Asionyx.Services.Deployment.Client has a corresponding option to call the api endpoint on the Asionyx.Services.Deployment service.
+
+## Asionyx.Services.Deployment (PRESENT)
+
+- net9.0 Kestrel web service hosting API endpoints for local machine configuration. (IMPLEMENTED)
+  - it has following endpoints (IMPLEMENTED)
+    - `/info` — returns application version based on assembly version. (IMPLEMENTED)
+    - `/status` — returns 200 OK when the service has appropriate permissions. (IMPLEMENTED)
+    - `/systemd` — manage systemd-style services: add/remove/start/stop/status. (IMPLEMENTED)
+    - `/packages` — manage apt packages (install/remove/list). (IMPLEMENTED)
+    - `/filesystem/files` — manage files (upload/download/write/read/delete). (IMPLEMENTED)
+    - `/package` — accepts a `.nupkg`, extracts to uploads dir and returns `manifest.json`. (IMPLEMENTED)
+
+### Testing workflow / requirements
+
+- Integration tests drive the emulator via the deployment service (`/systemd`). The container-ready signal is that the `Asionyx.Services.HelloWorld` `/info` endpoint is reachable after being started via the emulator. (REQUIREMENT)
+- Integration tests must not rely on any environment variables inside the container except `API_KEY` for authentication. (REQUIREMENT)
+- The systemd emulator treats managed apps as .NET apps and launches published DLLs with `dotnet <dll>` or single-file executables as appropriate. (REQUIREMENT)
+- Managed services are launched as background processes so the deployment container continues running. (REQUIREMENT)
+
+### Security / API key
+
+- All endpoints except `/info` are protected by `X-API-KEY`. (IMPLEMENTED)
+- `IApiKeyService` centralises key lifecycle; service prefers `API_KEY` env var, otherwise reads `/etc/asionyx_api_key`, or generates and persists an encrypted key using ASP.NET Data Protection. (IMPLEMENTED)
+
+## Packaging / Runtime
+
+- The orchestrator (`orchestrate.ps1`) publishes projects outside the image; the Dockerfile copies published output into a minimal runtime image. (IMPLEMENTED)
+- Build policy: the container image must NOT build the solution inside the image; publishing is done outside the image. (IMPLEMENTED)
+
+## Diagnostics
+
+- In-process diagnostics writer (`IAppDiagnostics`/`FileDiagnostics`) persists structured JSON for post-mortem inspection using `Newtonsoft.Json` and atomic writes. (IMPLEMENTED)
+
+## CI / infra notes
+
+- A GitHub Actions CI workflow exists to build and run tests (`.github/workflows/ci.yml`). The CI progress items are tracked separately. (ADDED)
+- Fix warnings about `Microsoft.CodeAnalysis.NetAnalyzers` package mismatch have been addressed in the repo. (IMPLEMENTED)
+
+## Development / next steps
+
+- Run the full orchestrator script to exercise the full E2E flow (publish → build image → run container → run tests). (IMPLEMENTED — orchestrator run completed locally in workspace)
+- If you want CI to run the orchestrator automatically, ensure the CI runner has Docker and permission to run the published workflow (tracked as a follow-up).
+
+---
+
+If you'd like, I can now:
+- run the orchestrator again to re-validate, or
+- push these documentation updates to a branch and open a PR, or
+- update the CI workflow to run the orchestrator (requires adjusting CI permissions).
 ```markdown
 # Project features
 

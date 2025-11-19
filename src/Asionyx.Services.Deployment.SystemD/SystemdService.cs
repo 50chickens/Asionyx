@@ -37,13 +37,13 @@ public class SystemdService
 
         var serviceFilePath = $"/etc/systemd/system/{_serviceName}.service";
 
-        try
-        {
-            await File.WriteAllTextAsync(serviceFilePath, serviceContent);
-            await ExecuteCommandAsync("systemctl", "daemon-reload");
-            Console.WriteLine($"Service {_serviceName} created successfully at {serviceFilePath}");
-            return true;
-        }
+            try
+            {
+                await File.WriteAllTextAsync(serviceFilePath, serviceContent);
+                // Emulate daemon-reload (noop in this file-backed emulator)
+                Console.WriteLine($"Service {_serviceName} created successfully at {serviceFilePath}");
+                return true;
+            }
         catch (Exception ex)
         {
             Console.WriteLine($"Error creating service: {ex.Message}");
@@ -55,17 +55,69 @@ public class SystemdService
     {
         try
         {
-            var result = await ExecuteCommandAsync("systemctl", $"start {_serviceName}");
-            if (result.ExitCode == 0)
+            // Attempt to locate a unit file first
+            var unitPath = $"/etc/systemd/system/{_serviceName}.service";
+            string? exec = null;
+            string? workDir = null;
+            if (File.Exists(unitPath))
             {
-                Console.WriteLine($"Service {_serviceName} started successfully");
-                return true;
+                var lines = await File.ReadAllLinesAsync(unitPath);
+                foreach (var l in lines)
+                {
+                    if (l.TrimStart().StartsWith("ExecStart=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        exec = l.Substring(l.IndexOf('=') + 1).Trim();
+                    }
+                    else if (l.TrimStart().StartsWith("WorkingDirectory=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        workDir = l.Substring(l.IndexOf('=') + 1).Trim();
+                    }
+                }
             }
-            else
+
+            if (string.IsNullOrWhiteSpace(exec))
             {
-                Console.WriteLine($"Failed to start service {_serviceName}: {result.Error}");
+                // Fallback to mapping a service name to /app/<short>/<fullname>.dll
+                var shortName = _serviceName.Split('.').Last();
+                var folder = shortName.ToLowerInvariant();
+                var dllPath = Path.Combine("/app", folder, _serviceName + ".dll");
+                if (!File.Exists(dllPath))
+                {
+                    Console.Error.WriteLine($"Executable not found: {dllPath}");
+                    return false;
+                }
+                exec = $"dotnet {dllPath}";
+            }
+
+            // Start the process described by exec
+            var parts = exec.Trim().Split(' ', 2);
+            string file = parts[0].Trim('"');
+            string args = parts.Length > 1 ? parts[1] : string.Empty;
+
+            var psi = new ProcessStartInfo(file, args)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            if (!string.IsNullOrWhiteSpace(workDir)) psi.WorkingDirectory = workDir;
+
+            var proc = Process.Start(psi);
+            if (proc == null)
+            {
+                Console.Error.WriteLine("Failed to start process for service {0}", _serviceName);
                 return false;
             }
+
+            // Persist PID
+            var pidDir = Path.Combine(Directory.GetCurrentDirectory(), "runtime");
+            Directory.CreateDirectory(pidDir);
+            var pidFile = Path.Combine(pidDir, _serviceName + ".pid");
+            await File.WriteAllTextAsync(pidFile, proc.Id.ToString());
+
+            Console.WriteLine($"Service {_serviceName} started (pid={proc.Id})");
+            return true;
         }
         catch (Exception ex)
         {
@@ -78,17 +130,27 @@ public class SystemdService
     {
         try
         {
-            var result = await ExecuteCommandAsync("systemctl", $"stop {_serviceName}");
-            if (result.ExitCode == 0)
+            var pidFile = Path.Combine(Directory.GetCurrentDirectory(), "runtime", _serviceName + ".pid");
+            if (!File.Exists(pidFile))
             {
-                Console.WriteLine($"Service {_serviceName} stopped successfully");
-                return true;
-            }
-            else
-            {
-                Console.WriteLine($"Failed to stop service {_serviceName}: {result.Error}");
+                Console.WriteLine($"{_serviceName} not running");
                 return false;
             }
+            var t = await File.ReadAllTextAsync(pidFile);
+            if (!int.TryParse(t, out var pid))
+            {
+                File.Delete(pidFile);
+                return false;
+            }
+            try
+            {
+                var p = Process.GetProcessById(pid);
+                p.Kill(entireProcessTree: true);
+            }
+            catch { }
+            try { File.Delete(pidFile); } catch { }
+            Console.WriteLine($"Service {_serviceName} stopped");
+            return true;
         }
         catch (Exception ex)
         {
@@ -124,16 +186,19 @@ public class SystemdService
     {
         try
         {
-            var result = await ExecuteCommandAsync("systemctl", $"is-active {_serviceName}");
-            var status = result.Output.Trim();
-
-            return status switch
+            var pidFile = Path.Combine(Directory.GetCurrentDirectory(), "runtime", _serviceName + ".pid");
+            if (!File.Exists(pidFile)) return ServiceStatus.Inactive;
+            var t = await File.ReadAllTextAsync(pidFile);
+            if (!int.TryParse(t, out var pid)) return ServiceStatus.Unknown;
+            try
             {
-                "active" => ServiceStatus.Active,
-                "inactive" => ServiceStatus.Inactive,
-                "failed" => ServiceStatus.Failed,
-                _ => ServiceStatus.Unknown,
-            };
+                var p = Process.GetProcessById(pid);
+                return ServiceStatus.Active;
+            }
+            catch
+            {
+                return ServiceStatus.Inactive;
+            }
         }
         catch (Exception ex)
         {
@@ -152,6 +217,30 @@ public class SystemdService
 
     private async Task<CommandResult> ExecuteCommandAsync(string command, string arguments)
     {
+        // Provide a minimal emulation for certain systemctl operations used by this emulator
+        if (string.Equals(command, "systemctl", StringComparison.OrdinalIgnoreCase))
+        {
+            var args = arguments?.Trim() ?? string.Empty;
+            if (args.StartsWith("daemon-reload", StringComparison.OrdinalIgnoreCase))
+            {
+                return new CommandResult { ExitCode = 0, Output = "", Error = "" };
+            }
+            if (args.StartsWith("is-active", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = args.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2) return new CommandResult { ExitCode = 3, Output = "", Error = "" };
+                var svc = parts[1].Trim();
+                var pidFile = Path.Combine(Directory.GetCurrentDirectory(), "runtime", svc + ".pid");
+                if (!File.Exists(pidFile)) return new CommandResult { ExitCode = 3, Output = "inactive", Error = "" };
+                var t = await File.ReadAllTextAsync(pidFile);
+                if (!int.TryParse(t, out var pid)) return new CommandResult { ExitCode = 3, Output = "inactive", Error = "" };
+                try { var p = Process.GetProcessById(pid); return new CommandResult { ExitCode = 0, Output = "active", Error = "" }; } catch { return new CommandResult { ExitCode = 3, Output = "inactive", Error = "" }; }
+            }
+            // For start/stop/enable we return an informative error to prompt higher-level logic to use internal implementation
+            return new CommandResult { ExitCode = 3, Output = "", Error = $"Command {arguments} not emulated" };
+        }
+
+        // Generic fallback: attempt to execute command if present on system
         var processStartInfo = new ProcessStartInfo
         {
             FileName = command,

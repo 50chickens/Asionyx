@@ -7,103 +7,41 @@ using NUnit.Framework;
 [TestFixture]
 public class DeploymentIntegrationTests
 {
+
     [Test]
     public async Task InfoEndpoint_Returns_Info_From_Built_Image()
     {
-        // The orchestrator should have built and tagged the image as 'asionyx/deployment:local'.
-        var image = "asionyx/deployment:local";
-        var containerName = "asionyx_integration_test";
+        // Tests use a shared container started by IntegrationTestSetup.
+        var containerName = Environment.GetEnvironmentVariable("TEST_CONTAINER_NAME") ?? "asionyx_integration_shared";
+        var hostPort = Environment.GetEnvironmentVariable("TEST_HOST_PORT");
+        Assert.That(hostPort, Is.Not.Null, "TEST_HOST_PORT must be set by IntegrationTestSetup");
 
-        // Start or reuse a container. If an orchestrator-run container named 'asionyx_local' exists, reuse it.
-        var reuseExisting = false;
-        var startedContainer = false;
-        // Check for orchestrator-managed container
-        var checkInfo = new ProcessStartInfo("docker", "ps -a --filter name=asionyx_local --format \"{{.Names}}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        var checkProc = Process.Start(checkInfo);
-        string checkOut = string.Empty;
-        if (checkProc != null)
-        {
-            checkOut = (await checkProc.StandardOutput.ReadToEndAsync()).Trim();
-            checkProc.WaitForExit(2000);
-        }
-        if (!string.IsNullOrWhiteSpace(checkOut))
-        {
-            containerName = "asionyx_local";
-            reuseExisting = true;
-        }
-
-        if (!reuseExisting)
-        {
-            // Start the container (publish exposed ports to random host ports).
-            // Ensure the test and container share an API key: prefer environment variable, otherwise generate one here and inject it.
-            var apiKeyEnv = Environment.GetEnvironmentVariable("API_KEY");
-            var usedApiKey = apiKeyEnv;
-            if (string.IsNullOrWhiteSpace(usedApiKey))
-            {
-                usedApiKey = Guid.NewGuid().ToString("N");
-                // export for later client use
-                Environment.SetEnvironmentVariable("API_KEY", usedApiKey);
-            }
-
-            var runArgs = $"run -d --name {containerName} -P -e API_KEY={usedApiKey} {image}";
-            var startInfo = new ProcessStartInfo("docker", runArgs) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-            var proc = Process.Start(startInfo);
-            if (proc == null) Assert.Fail("Failed to start docker process");
-            var containerId = (await proc.StandardOutput.ReadToEndAsync()).Trim();
-            proc.WaitForExit(5000);
-            if (string.IsNullOrWhiteSpace(containerId))
-            {
-                var err = await proc.StandardError.ReadToEndAsync();
-                Assert.Fail($"Failed to start container: {err}");
-            }
-            startedContainer = true;
-        }
-
+        // Determine API key to use for authenticated endpoints.
+        var apiKey = Environment.GetEnvironmentVariable("API_KEY");
         try
         {
-            // Get mapped host port for container's port 5000
-            var portInfo = new ProcessStartInfo("docker", $"port {containerName} 5000") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-            var portProc = Process.Start(portInfo);
-            var portOutput = (await portProc.StandardOutput.ReadToEndAsync()).Trim();
-            portProc.WaitForExit(2000);
-            if (string.IsNullOrWhiteSpace(portOutput)) Assert.Fail("Could not determine mapped host port for container");
-
-            // portOutput looks like: 0.0.0.0:32768
-            var parts = portOutput.Split(':');
-            var hostPort = parts[^1];
-
-            // Determine API key to use for authenticated endpoints. If not set in the test environment,
-            // try to read it from the container's /etc/asionyx_api_key so client and server share the same key.
-            var apiKey = Environment.GetEnvironmentVariable("API_KEY");
-            // If the test process has an API key set, prefer the container's persisted key when available
-            // to avoid mismatches caused by different startup lifecycles.
-            try
+            // If container has a persisted key, prefer it
+            var execInfo = new ProcessStartInfo("docker", $"exec {containerName} cat /etc/asionyx_api_key") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var execProc = Process.Start(execInfo);
+            if (execProc != null)
             {
-                var execInfo = new ProcessStartInfo("docker", $"exec {containerName} cat /etc/asionyx_api_key") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-                var execProc = Process.Start(execInfo);
-                if (execProc != null)
+                var fileKey = (await execProc.StandardOutput.ReadToEndAsync()).Trim();
+                execProc.WaitForExit(2000);
+                if (!string.IsNullOrWhiteSpace(fileKey))
                 {
-                    var fileKey = (await execProc.StandardOutput.ReadToEndAsync()).Trim();
-                    execProc.WaitForExit(2000);
-                    if (!string.IsNullOrWhiteSpace(fileKey))
-                    {
-                        apiKey = fileKey; // prefer container-stored key
-                        Environment.SetEnvironmentVariable("API_KEY", apiKey);
-                    }
+                    apiKey = fileKey;
+                    Environment.SetEnvironmentVariable("API_KEY", apiKey);
                 }
             }
-            catch { /* ignore, apiKey may remain from environment */ }
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                // fallback: no key available
-            }
+        }
+        catch { }
 
-            using var client = new HttpClient();
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                if (client.DefaultRequestHeaders.Contains("X-API-KEY")) client.DefaultRequestHeaders.Remove("X-API-KEY");
-                client.DefaultRequestHeaders.Add("X-API-KEY", apiKey);
-            }
+        using var client = new HttpClient();
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            if (client.DefaultRequestHeaders.Contains("X-API-KEY")) client.DefaultRequestHeaders.Remove("X-API-KEY");
+            client.DefaultRequestHeaders.Add("X-API-KEY", apiKey);
+        }
 
             // Poll the /info endpoint until it becomes available (timeout ~30s)
             HttpResponseMessage response = null;
@@ -205,15 +143,5 @@ public class DeploymentIntegrationTests
             uploadResp.EnsureSuccessStatusCode();
             var uploadBody = await uploadResp.Content.ReadAsStringAsync();
             Assert.That(uploadBody, Does.Contain("testpkg") | Does.Contain("manifest"));
-        }
-        finally
-        {
-            // Clean up container only if we started it in this test run
-            if (startedContainer)
-            {
-                var rmProc = Process.Start(new ProcessStartInfo("docker", $"rm -f {containerName}") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false });
-                if (rmProc != null) rmProc.WaitForExit(5000);
-            }
-        }
     }
 }
