@@ -87,6 +87,6 @@ add: services.AddControllers().AddNewtonsoftJson(...) in Program.cs. (IMPLEMENTE
 wire MVC-formatting globally to Newtonsoft for consistent controller serialization:
 Add AddControllers().AddNewtonsoftJson(...) and verify controllers behavior. (IMPLEMENTED)
 sweep the repo for any remaining System.Text.Json usages and convert them to Newtonsoft. (IMPLEMENTED — only build artifacts contain System.Text.Json; source code uses Newtonsoft where needed)
- run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will rebuild images and run tests). (PENDING)
+ run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will publish projects outside the image, build the image from published output, and run tests). (PENDING)
 
 

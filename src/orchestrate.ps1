@@ -22,6 +22,23 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+# Publish projects to a local `publish` folder so the Dockerfile can copy only published outputs.
+Write-Host "Publishing projects to ./publish/..." -ForegroundColor Green
+$publishRoot = Join-Path $scriptDir 'publish'
+if (Test-Path $publishRoot) { Remove-Item $publishRoot -Recurse -Force }
+New-Item -ItemType Directory -Path (Join-Path $publishRoot 'deployment') | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $publishRoot 'systemd') | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $publishRoot 'helloworld') | Out-Null
+
+dotnet publish Asionyx.Services.Deployment -c Release -o "$publishRoot/deployment"
+if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish deployment failed" -ForegroundColor Red; exit $LASTEXITCODE }
+
+dotnet publish Asionyx.Services.Deployment.SystemD -c Release -o "$publishRoot/systemd"
+if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish systemd failed" -ForegroundColor Red; exit $LASTEXITCODE }
+
+dotnet publish Asionyx.Services.HelloWorld -c Release -o "$publishRoot/helloworld"
+if ($LASTEXITCODE -ne 0) { Write-Host "dotnet publish helloworld failed" -ForegroundColor Red; exit $LASTEXITCODE }
+
 # Build docker image (explicitly target Linux platform)
 Write-Host "Building docker image asionyx/deployment:local (linux)" -ForegroundColor Green
 # Build the final application/integration image (published apps copied into image)
