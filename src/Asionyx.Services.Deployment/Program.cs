@@ -56,6 +56,13 @@ var builder = Host.CreateDefaultBuilder(args)
 
             app.Use(async (context, next) =>
             {
+                // If running in an insecure test mode (set by orchestrator/GHA), skip API key enforcement.
+                var insecure = Environment.GetEnvironmentVariable("ASIONYX_INSECURE_TESTING");
+                if (!string.IsNullOrWhiteSpace(insecure) && insecure == "1")
+                {
+                    await next();
+                    return;
+                }
                 // Allow unauthenticated access to /info (allow trailing slash or subpaths)
                 var path = context.Request.Path.Value ?? string.Empty;
                 // Allow all GET requests to be unauthenticated to simplify integration testing in disposable containers

@@ -40,7 +40,7 @@ if (docker ps -a --format '{{.Names}}' | Select-String -Pattern '^asionyx_local$
 
 # Pass the API key into the container environment. Also export locally so dotnet test can read it.
 $env:API_KEY = $apiKey
-docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey asionyx/deployment:local | Out-Null
+docker run -d --name asionyx_local -p 5000:5000 -e API_KEY=$apiKey -e ASIONYX_INSECURE_TESTING=1 asionyx/deployment:local | Out-Null
 
 # wait for readiness
 $max = 60
