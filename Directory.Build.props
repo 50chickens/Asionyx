@@ -8,5 +8,8 @@
   <ItemGroup>
     <!-- Common analyzers applied to all projects in the repo -->
     
+    <!-- Pin analyzer version to match SDK analyzers to avoid SDK/package mismatch warnings -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+    
   </ItemGroup>
 </Project>
