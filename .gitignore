@@ -49,3 +49,5 @@ DesignTimeBuild
 *.VC.db
 *.VC.opendb
 *.trx
+coverage.cobertura.xml
+coverage-report

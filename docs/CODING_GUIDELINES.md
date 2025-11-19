@@ -152,86 +152,190 @@ This document collects a comprehensive, pragmatic list of coding practices for .
 - Fail the CI on formatting or analyzer rule violations unless explicitly suppressed with documented rationale.
 
 ## Testing
-- Keep unit tests fast and deterministic. Use `*.Tests` projects near the code they exercise.
-- Integration tests that require Docker or external services should be marked and run by orchestrator/CI in Docker-enabled runners.
-- Supply `PublicProgram` or test hooks to allow `WebApplicationFactory` usage for server tests.
+# Asionyx Coding Guidelines (C# / .NET)
 
-## Dependency Injection (DI)
-- Use DI for all runtime dependencies. Register small-surface interfaces and avoid `new` in controllers/services for production dependencies.
-- Use `Singleton` for long-lived services, `Scoped` for per-request services, and `Transient` for lightweight ephemeral services.
+This document supplements `.editorconfig` with team-level conventions and rationale. It is intentionally pragmatic and focuses on things we care about for this project (services running on Linux).
 
-## Abstractions for System Operations
-- Wrap system-level operations (file writes, process invocations, systemctl, package installs) behind interfaces (e.g., `ISystemConfigurator`) so they can be replaced by emulators or mocks in tests.
+## Goals
 
-## Logging & Observability
-- Use structured logging (`ILogger<T>`) everywhere. Include contextual fields (request id, correlation id, service name).
-- Avoid `Console.WriteLine` in library code. Use console output only for thin CLI apps or during early startup while logging isn't configured.
+- Predictable, readable C# code.
+- Consistent formatting across editors and CI.
+- Favor small, testable services with clear DI boundaries.
+- Keep container images small and reproducible.
+- Add unit tests for high-priority modules.
 
-## Error Handling & Exceptions
-- Do not swallow exceptions silently. Log full exceptions at appropriate levels and return meaningful errors.
-- Prefer typed exceptions for predictable error handling or return result objects with error details for library APIs.
+## Formatting / tooling
 
-## Async & Concurrency
-- Use `async`/`await` consistently and suffix async methods with `Async`.
-- Avoid blocking on async tasks (e.g., `GetAwaiter().GetResult()` or `.Result`). Initialize async resources in startup/host or expose async initialization APIs.
-- Protect lazy async initialization with `SemaphoreSlim` or an `AsyncLazy` pattern to prevent races.
+- Use `.editorconfig` rules. Run `dotnet format` during development and in CI (`--verify-no-changes` in checks).
+- Use Roslyn analyzers and StyleCop (configured in `Directory.Build.props`) for consistent code quality.
 
-## Input Validation & Sanitization
-- Validate all external inputs (HTTP body, CLI args) with strict rules. For service names, use a safe regex (e.g., `^[A-Za-z0-9._-]{1,64}$`).
-- Sanitize values used in file paths or templates to prevent path traversal and template injection.
+## Project structure
 
-## Process & Command Execution
-- Use `ProcessStartInfo`/`ProcessStartAsync` where available to avoid shell-escaping issues. Always validate arguments and add timeouts/cancellation for process execution.
-- Capture stdout/stderr and log appropriately. Fail fast if `Process.Start()` fails and surface error details.
+- Keep service projects small and focused. `Asionyx.Services.Deployment` should only host API/controller logic and delegate system operations to `ISystemConfigurator` implementations in `Asionyx.Library.Core` or `Asionyx.Library.Shared`.
+- Tests go in `*.Tests` projects alongside the code they exercise.
 
-## Network IO & Timeouts
-- Add cancellation tokens and timeouts for network reads/writes (TCP, HTTP). Avoid `Task.Delay` hacks for synchronization.
-- Use framed protocols (newline-terminated messages or length-prefix) to avoid `ReadToEndAsync` deadlocks.
+## API Controllers
 
-## Configuration Management
-- Centralize configuration with `appsettings.json` and environment variable overrides. Bind strongly-typed settings with `IOptions<T>` or `IConfiguration.Get<T>()`.
-- Keep templates in separate files (e.g., `templates/*.template`) instead of inline huge JSON strings for maintainability.
+- Keep controllers thin: validate input, map to domain/service calls, return appropriate status codes.
+- Use explicit model DTOs for requests/responses. Avoid returning internal domain objects from controllers.
+- Endpoints should use RESTful verbs where possible.
 
-## Secrets & Data Protection
-- Never commit secrets. Prefer environment variables or secret stores.
-- When persisting secrets, encrypt them using `IDataProtector` or a secret manager and enforce file permissions (`chmod 600`).
+Recommended endpoints (examples for `Asionyx.Services.Deployment`):
+- `GET /info` — service metadata (version, environment)
+- `GET /status` — simple health/status check (200 OK if the service is healthy)
+- `POST /systemd` — manage systemd services (body contains `{ action: "start"|"stop"|"status", name: "..." }`) — keep this behind appropriate auth in production
 
-## File & Binary Hygiene
-- Do not commit `bin/` and `obj/` artifacts. Add them to `.gitignore` and remove from repository history if present.
-- Keep generated files separate from source and clearly documented.
+## Logging and Errors
 
-## Naming & Language Conventions
-- `PascalCase` for public types and methods; `camelCase` for parameters and locals.
-- Async methods should have `Async` suffix. Prefer nullable annotations (`Nullable enable`) and modern C# features.
+- Use structured logging (`ILogger<T>`) and include context (request id, service name).
+- Do not swallow exceptions silently. Log at appropriate levels and return a meaningful HTTP status.
 
-## Performance & Resilience
-- Add appropriate timeouts, backoff strategies for retries, and circuit-breakers for external dependencies.
-- Prefer correctness over premature optimization; measure with benchmarks when needed.
+## Dependency injection
 
-## Security: File Permissions & Ownership
-- When creating files under system locations (e.g., `/etc`), ensure proper ownership and restrictive permissions are applied after writing.
+- Register interfaces with small lifetime surface. Use `Singleton` for long-lived services (like system configurator), `Scoped` for request-scoped, `Transient` for lightweight ephemeral services.
 
-## CI Enforced Checks
-- CI should include: formatting (`dotnet format`), static analysis, build-and-test, and optionally secret-scanning tools.
+## System-level operations
 
-## Practical Developer Commands
+- System operations (service management, package install, file writes) should be behind `ISystemConfigurator` so they can be replaced by emulators in tests (the `SystemD` emulator project is an example).
+- Avoid running operations as root in tests; use emulators and mocks where possible.
+
+## Docker
+
+- Use official `mcr.microsoft.com/dotnet` images for build and runtime to improve reproducibility.
+- Expose only necessary ports and set `ASPNETCORE_URLS` to listen on the proper port (e.g., `http://+:5000`).
+- Normalize line endings for shell scripts to `LF` and mark them executable.
+
+## Tests
+
+- Unit tests should be fast and independent.
+- Integration tests that require Docker should be marked explicit and run by orchestrator/CI in a Docker-enabled environment.
+
+## Security
+
+- Don’t commit secrets. Use environment variables or other secret stores for credentials.
+
+## Useful commands
+
 - Format: `dotnet format`
-- Restore: `dotnet restore` or `dotnet restore src/Project1.sln`
+- Restore: `dotnet restore` or `dotnet restore Asionyx.sln`
 - Build: `dotnet build -c Release`
 - Test: `dotnet test -c Release`
 
+## Recommended Programming Techniques (practical, actionable)
+
+These are practical techniques to improve robustness, readability, and testability across the repository. Apply them incrementally where they provide clear value.
+
+- Use POCOs/DTOs instead of raw `string[]` or loosely-structured arrays.
+  - Example: replace `StartUnit(string[] parts)` with `record StartUnitCmd(string UnitName);` and parse arguments into typed commands.
+
+- Prefer strongly-typed configuration and options objects for paths and behavior.
+  - Example: `class EmulatorOptions { public string UnitsDir { get; set; } = Path.Combine(Directory.GetCurrentDirectory(), "units"); }` and bind with `IOptions<EmulatorOptions>`.
+
+- Convert entry points to async: `static async Task<int> Main(string[] args)` and `await` long-running operations instead of using `.GetAwaiter().GetResult()`.
+
+- Encapsulate file and runtime state behind repositories/services.
+  - Example: `IUnitRepository` (manages unit files) and `IServiceManager` (starts/stops services) so process logic and file IO can be mocked in tests.
+
+- Return rich `CommandResult` objects instead of raw ints; include `ExitCode`, `StdOut`, `StdErr`.
+
+- Use dependency injection, avoid global mutable state, and prefer small single-purpose classes.
+
+- Secure process invocation:
+  - Use `ProcessStartInfo` with explicit `FileName` and `ArgumentList` or `ArgumentEscaping`, set `RedirectStandardOutput/Error = true`, and pass a timeout/CancellationToken.
+
+- Atomic file writes and safe PID handling:
+  - Write to a temporary file then rename/move into place. When storing PIDs, additionally record command-line and start time to validate the PID on stop.
+
+- Input validation and sanitization:
+  - Strictly validate service names and file paths (e.g., `^[A-Za-z0-9._-]{1,64}$`) and sanitize values used in file paths.
+
+- Use `System.CommandLine` or a small parser for CLI handling and auto-generated help text.
+
+- Structured output for machine consumption:
+  - Add a `--json` flag that returns a compact JSON object for tooling and controller consumption instead of relying on free-form stdout parsing.
+
+- Prefer typed unit-file representations rather than `Dictionary<string, Dictionary<string,string>>`.
+  - Example: `class UnitFile { public ServiceSection Service { get; set; } }` with a `ServiceSection` POCO.
+
+- Make operations cancellable via `CancellationToken` and enforce sensible timeouts for long-running tasks.
+
+- Add interfaces for side-effecting operations so tests can replace them with in-memory emulators.
+
+- Capture and propagate errors as structured data; map to HTTP status codes at the API boundary, not in low-level libraries.
+
+### String Processing & Text Parsing
+
+Text parsing is a common source of brittle code, bugs, and performance issues. Apply these guidelines when working with strings and textual input:
+
+- Prefer structured parsers over ad-hoc splitting:
+  - Avoid brittle patterns like `var parts = s.Split(':'); var x = parts[1];` which can throw or silently mis-interpret malformed input.
+  - Use `TryParse`, JSON parsers (`System.Text.Json`), or CSV libraries (`CsvHelper`) when the input has a standard format.
+
+- Use typed results and POCOs instead of raw arrays:
+  - Parse text into a `record` or class (e.g., `record KeyValue(string Key, string Value)`) so callers expect typed data instead of positional indexes.
+
+- For simple splits prefer `IndexOf`/`AsSpan()` to avoid allocations and clearer checks:
+  - Example: `var i = s.IndexOf(':'); if (i > -1) { var key = s.AsSpan(0,i).ToString(); var val = s.AsSpan(i+1).ToString(); }` — this avoids creating intermediate arrays and makes bounds explicit.
+
+- Use `ReadOnlySpan<char>` / `Span<char>` for high-performance, allocation-free parsing in hot paths:
+  - APIs like `Utf8Parser`, `MemoryExtensions` and `ReadOnlySpan<char>` let you parse numbers and slices without allocations.
+
+- Prefer `TryParse` over `Parse` and avoid exceptions for control flow:
+  - `int.TryParse`, `DateTime.TryParseExact`, etc. return a bool and avoid throwing on invalid input.
+
+- Regex usage:
+  - Use `Regex` with named capture groups for complex extractions rather than multiple `Split` + index steps.
+  - Cache/compile reusable regexes as `static readonly Regex` with `RegexOptions.Compiled | RegexOptions.CultureInvariant` when the regex is used frequently. Be cautious: `Compiled` has JIT/startup cost and may not be beneficial for rarely-used patterns.
+  - Always set a match timeout for user-controlled input: `new Regex(pattern, options, TimeSpan.FromMilliseconds(500))` to mitigate ReDoS risks.
+
+- Avoid hand-rolled parsers for known formats — prefer libraries:
+  - For CSV/TSV use a proven parser (`CsvHelper`) to handle quoting/escaping reliably.
+  - For JSON use `System.Text.Json` or `Newtonsoft.Json` depending on requirements.
+
+- Concatenation and building strings:
+  - Use `StringBuilder` for incremental concatenation in loops. For single-shot known-length concatenation prefer `string.Create` or interpolated strings.
+
+- Culture and formatting:
+  - When parsing or formatting numbers/dates for machine protocols, use `CultureInfo.InvariantCulture` to avoid locale surprises.
+  - When accepting user-facing input, explicitly document the expected culture or accept multiple formats and normalize.
+
+- Defensive checks and input validation:
+  - Always validate input length and shape before indexing into arrays returned by `Split`.
+  - Prefer `Span`-based scanning or `IndexOf` checks to be explicit about boundaries.
+
+- Performance vs readability:
+  - Use `Span`/`Utf8Parser` for performance-critical code, but keep readability for non-hot paths. Measure before optimizing.
+
+- Examples of migration (quick patterns):
+  - From brittle split:
+    - Bad: `var parts = s.Split(','); var a = parts[0]; var b = parts[1];`
+    - Better: `if (TryParsePair(s, out var a, out var b)) { ... }` where `TryParsePair` uses `IndexOf`/`AsSpan` or `Regex`.
+
+  - From repeated allocation to span:
+    - Bad: `var token = s.Substring(start, len);`
+    - Better (allocation-avoid): `var tokenSpan = s.AsSpan(start, len);` and use `tokenSpan` with `Utf8Parser` or copy to a buffer only when needed.
+
+These rules reduce bugs, improve performance in hot paths, and make parsing logic more testable. When in doubt, prefer clarity first; optimize with `Span`/`Utf8Parser` only after profiling.
+
 ## Conventions summary
-- Naming: `PascalCase` for public types and methods; `camelCase` for parameters and locals.
-- Async methods should have `Async` suffix. Prefer nullable annotations (`Nullable enable`) and modern C# features.
+
+- Naming: `PascalCase` for public types and methods; `camelCase` for method parameters and local variables.
+- Async methods should have `Async` suffix.
+- Prefer nullable annotations (`Nullable enable`) and modern C# features.
 - Avoid global state; prefer DI for dependencies.
 
-- Practical Developer Commands
-  - Format: `dotnet format`
-  - Restore: `dotnet restore` or `dotnet restore src/Project1.sln`
-  - Build: `dotnet build -c Release`
-  - Test: `dotnet test -c Release`
+## CI & Hygiene
 
-  - Do not commit `bin/` and `obj/` artifacts. Add them to `.gitignore` and remove from repository history if present.
-- Keep generated files separate from source and clearly documented.
+- CI should include formatting (`dotnet format`), static analysis, build-and-test, and secret scanning.
+- Do not commit `bin/` and `obj/` artifacts. Add them to `.gitignore` and remove from repository history if present.
 
-- CI should include: formatting (`dotnet format`), static analysis, build-and-test, and optionally secret-scanning tools.
+## Practical Developer Commands
+
+- Format: `dotnet format`
+- Restore: `dotnet restore` or `dotnet restore Asionyx.sln`
+- Build: `dotnet build -c Release`
+- Test: `dotnet test -c Release`
+
+---
+
+If you want, I can now implement a small refactor example (non-invasive) in the SystemD emulator to demonstrate using a POCO for commands and an `IUnitRepository` interface — or I can just run a review pass for other files to identify the best first refactors.
