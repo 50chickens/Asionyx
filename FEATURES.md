@@ -76,6 +76,8 @@ CI
 - `Asionyx.Services.Deployment.Docker/entrypoint.sh` line endings are normalized inside the image to avoid shebang CRLF errors on Linux. (IMPLEMENTED)
 - the CI progress should: (PENDING)
 
+- Build policy: the container image must NOT build the solution inside the image. The repository `orchestrate.ps1` (or CI job) must perform a full `dotnet restore` / `dotnet build` / `dotnet publish` outside the image and the Dockerfile should copy only the published output into a minimal runtime image. (PENDING)
+
 Notes and next steps
 - Integration tests that rely on Docker/Testcontainers will only run in environments that have Docker and can restore the Testcontainers package. The tests are marked `Explicit` and will not run in default CI.
 - To get full systemd integration (so the host reacts to systemctl start/stop), add `Microsoft.Extensions.Hosting.Systemd` to `Asionyx.Services.Deployment` and remove the shim added in `Program.cs`.
