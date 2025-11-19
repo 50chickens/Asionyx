@@ -7,6 +7,6 @@
 
   <ItemGroup>
     <!-- Common analyzers applied to all projects in the repo -->
-    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="7.0.0" PrivateAssets="all" />
+    
   </ItemGroup>
 </Project>
