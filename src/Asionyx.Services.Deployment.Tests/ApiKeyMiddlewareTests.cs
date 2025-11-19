@@ -2,14 +2,13 @@ using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Http;
 using Asionyx.Services.Deployment.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 
 namespace Asionyx.Services.Deployment.Tests;
@@ -35,8 +34,8 @@ public class ApiKeyMiddlewareTests
     {
         // Build a small in-memory app that uses the same ApiKeyService and middleware logic,
         // but exposes a simple POST endpoint that returns plain text (avoids MVC JSON output issues).
-    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
-    builder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.WebHost.UseTestServer();
         builder.Services.AddDataProtection();
         builder.Services.AddSingleton<IApiKeyService, ApiKeyService>();
 
@@ -91,8 +90,8 @@ public class ApiKeyMiddlewareTests
     [Test]
     public async Task MissingOrInvalidKey_Returns401or403()
     {
-    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
-    builder.WebHost.UseTestServer();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.WebHost.UseTestServer();
         builder.Services.AddDataProtection();
         builder.Services.AddSingleton<IApiKeyService, ApiKeyService>();
 

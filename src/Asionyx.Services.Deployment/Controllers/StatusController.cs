@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
@@ -12,7 +12,8 @@ public class StatusController : ControllerBase
     public IActionResult Get()
     {
         var isRoot = IsRunningAsRoot();
-        var info = new {
+        var info = new
+        {
             status = "ok",
             isRoot = isRoot,
             os = RuntimeInformation.OSDescription

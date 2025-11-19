@@ -14,50 +14,50 @@ public class DeploymentIntegrationTests
         var image = "asionyx/deployment:local";
         var containerName = "asionyx_integration_test";
 
-    // Start or reuse a container. If an orchestrator-run container named 'asionyx_local' exists, reuse it.
-    var reuseExisting = false;
-    var startedContainer = false;
-    // Check for orchestrator-managed container
-    var checkInfo = new ProcessStartInfo("docker", "ps -a --filter name=asionyx_local --format \"{{.Names}}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-    var checkProc = Process.Start(checkInfo);
-    string checkOut = string.Empty;
-    if (checkProc != null)
-    {
-        checkOut = (await checkProc.StandardOutput.ReadToEndAsync()).Trim();
-        checkProc.WaitForExit(2000);
-    }
-    if (!string.IsNullOrWhiteSpace(checkOut))
-    {
-        containerName = "asionyx_local";
-        reuseExisting = true;
-    }
-
-    if (!reuseExisting)
-    {
-        // Start the container (publish exposed ports to random host ports).
-        // Ensure the test and container share an API key: prefer environment variable, otherwise generate one here and inject it.
-        var apiKeyEnv = Environment.GetEnvironmentVariable("API_KEY");
-        var usedApiKey = apiKeyEnv;
-        if (string.IsNullOrWhiteSpace(usedApiKey))
+        // Start or reuse a container. If an orchestrator-run container named 'asionyx_local' exists, reuse it.
+        var reuseExisting = false;
+        var startedContainer = false;
+        // Check for orchestrator-managed container
+        var checkInfo = new ProcessStartInfo("docker", "ps -a --filter name=asionyx_local --format \"{{.Names}}\"") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var checkProc = Process.Start(checkInfo);
+        string checkOut = string.Empty;
+        if (checkProc != null)
         {
-            usedApiKey = Guid.NewGuid().ToString("N");
-            // export for later client use
-            Environment.SetEnvironmentVariable("API_KEY", usedApiKey);
+            checkOut = (await checkProc.StandardOutput.ReadToEndAsync()).Trim();
+            checkProc.WaitForExit(2000);
+        }
+        if (!string.IsNullOrWhiteSpace(checkOut))
+        {
+            containerName = "asionyx_local";
+            reuseExisting = true;
         }
 
-        var runArgs = $"run -d --name {containerName} -P -e API_KEY={usedApiKey} {image}";
-        var startInfo = new ProcessStartInfo("docker", runArgs) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        var proc = Process.Start(startInfo);
-        if (proc == null) Assert.Fail("Failed to start docker process");
-        var containerId = (await proc.StandardOutput.ReadToEndAsync()).Trim();
-        proc.WaitForExit(5000);
-        if (string.IsNullOrWhiteSpace(containerId))
+        if (!reuseExisting)
         {
-            var err = await proc.StandardError.ReadToEndAsync();
-            Assert.Fail($"Failed to start container: {err}");
+            // Start the container (publish exposed ports to random host ports).
+            // Ensure the test and container share an API key: prefer environment variable, otherwise generate one here and inject it.
+            var apiKeyEnv = Environment.GetEnvironmentVariable("API_KEY");
+            var usedApiKey = apiKeyEnv;
+            if (string.IsNullOrWhiteSpace(usedApiKey))
+            {
+                usedApiKey = Guid.NewGuid().ToString("N");
+                // export for later client use
+                Environment.SetEnvironmentVariable("API_KEY", usedApiKey);
+            }
+
+            var runArgs = $"run -d --name {containerName} -P -e API_KEY={usedApiKey} {image}";
+            var startInfo = new ProcessStartInfo("docker", runArgs) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            var proc = Process.Start(startInfo);
+            if (proc == null) Assert.Fail("Failed to start docker process");
+            var containerId = (await proc.StandardOutput.ReadToEndAsync()).Trim();
+            proc.WaitForExit(5000);
+            if (string.IsNullOrWhiteSpace(containerId))
+            {
+                var err = await proc.StandardError.ReadToEndAsync();
+                Assert.Fail($"Failed to start container: {err}");
+            }
+            startedContainer = true;
         }
-        startedContainer = true;
-    }
 
         try
         {
@@ -186,25 +186,25 @@ public class DeploymentIntegrationTests
             var delResp = await client.PostAsync($"http://localhost:{hostPort}/filesystem/files", delReq);
             delResp.EnsureSuccessStatusCode();
 
-                // Test package upload: create a small "nupkg" zip with manifest.json and upload
-                var tmp = System.IO.Path.GetTempPath();
-                var pkgDir = System.IO.Path.Combine(tmp, "asionyx_pkg_test");
-                try { if (System.IO.Directory.Exists(pkgDir)) System.IO.Directory.Delete(pkgDir, true); } catch { }
-                System.IO.Directory.CreateDirectory(pkgDir);
-                var manifestPath = System.IO.Path.Combine(pkgDir, "manifest.json");
-                System.IO.File.WriteAllText(manifestPath, "{ \"name\": \"testpkg\", \"version\": \"0.1.0\" }");
-                var nupkgPath = System.IO.Path.Combine(tmp, "testpkg.nupkg");
-                try { if (System.IO.File.Exists(nupkgPath)) System.IO.File.Delete(nupkgPath); } catch { }
-                System.IO.Compression.ZipFile.CreateFromDirectory(pkgDir, nupkgPath);
+            // Test package upload: create a small "nupkg" zip with manifest.json and upload
+            var tmp = System.IO.Path.GetTempPath();
+            var pkgDir = System.IO.Path.Combine(tmp, "asionyx_pkg_test");
+            try { if (System.IO.Directory.Exists(pkgDir)) System.IO.Directory.Delete(pkgDir, true); } catch { }
+            System.IO.Directory.CreateDirectory(pkgDir);
+            var manifestPath = System.IO.Path.Combine(pkgDir, "manifest.json");
+            System.IO.File.WriteAllText(manifestPath, "{ \"name\": \"testpkg\", \"version\": \"0.1.0\" }");
+            var nupkgPath = System.IO.Path.Combine(tmp, "testpkg.nupkg");
+            try { if (System.IO.File.Exists(nupkgPath)) System.IO.File.Delete(nupkgPath); } catch { }
+            System.IO.Compression.ZipFile.CreateFromDirectory(pkgDir, nupkgPath);
 
-                using var form = new System.Net.Http.MultipartFormDataContent();
-                using var fs = System.IO.File.OpenRead(nupkgPath);
-                var fileContent = new System.Net.Http.StreamContent(fs);
-                form.Add(fileContent, "file", "testpkg.nupkg");
-                var uploadResp = await client.PostAsync($"http://localhost:{hostPort}/package", form);
-                uploadResp.EnsureSuccessStatusCode();
-                var uploadBody = await uploadResp.Content.ReadAsStringAsync();
-                Assert.That(uploadBody, Does.Contain("testpkg") | Does.Contain("manifest"));
+            using var form = new System.Net.Http.MultipartFormDataContent();
+            using var fs = System.IO.File.OpenRead(nupkgPath);
+            var fileContent = new System.Net.Http.StreamContent(fs);
+            form.Add(fileContent, "file", "testpkg.nupkg");
+            var uploadResp = await client.PostAsync($"http://localhost:{hostPort}/package", form);
+            uploadResp.EnsureSuccessStatusCode();
+            var uploadBody = await uploadResp.Content.ReadAsStringAsync();
+            Assert.That(uploadBody, Does.Contain("testpkg") | Does.Contain("manifest"));
         }
         finally
         {

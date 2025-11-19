@@ -1,14 +1,9 @@
-using Autofac;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.Systemd;
-using Autofac.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
-using NLog.Web;
 using Asionyx.Library.Core;
-using Newtonsoft.Json;
-using Microsoft.AspNetCore.DataProtection;
 using Asionyx.Services.Deployment.Services;
-using System;
+using Autofac;
+using Autofac.Extensions.DependencyInjection;
+using Newtonsoft.Json;
+using NLog.Web;
 
 var builder = Host.CreateDefaultBuilder(args)
     // Allow the host to integrate with systemd if available. We provide a no-op shim below so
@@ -16,7 +11,8 @@ var builder = Host.CreateDefaultBuilder(args)
     // is not installed. Replace the shim with the real package when ready.
     .UseSystemd()
     .UseServiceProviderFactory(new AutofacServiceProviderFactory())
-    .ConfigureAppConfiguration((ctx, cfg) => {
+    .ConfigureAppConfiguration((ctx, cfg) =>
+    {
         cfg.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
     })
     .ConfigureWebHostDefaults(webBuilder =>

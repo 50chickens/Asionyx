@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
 using Asionyx.Library.Core;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
@@ -19,7 +19,8 @@ public class InfoController : ControllerBase
     [HttpGet]
     public IActionResult Get()
     {
-        var info = new {
+        var info = new
+        {
             Service = "Asionyx.Services.Deployment",
             Configurator = _configurator.GetInfo(),
             Env = _configuration["ASIONYX_ENV"] ?? "unknown"

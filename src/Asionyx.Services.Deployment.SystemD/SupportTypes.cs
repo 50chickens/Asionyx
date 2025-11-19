@@ -1,5 +1,3 @@
-using System;
-
 namespace Asionyx;
 
 public class SystemdServiceSettings

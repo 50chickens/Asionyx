@@ -39,7 +39,7 @@ try
             return 2;
     }
 }
-catch(Exception ex)
+catch (Exception ex)
 {
     Console.Error.WriteLine($"Request failed: {ex.Message}");
     return 1;

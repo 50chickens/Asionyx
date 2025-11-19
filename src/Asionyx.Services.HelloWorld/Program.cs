@@ -1,14 +1,9 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.Systemd;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // If running on Linux with systemd available, this will enable systemd integration when the package is present.
 try
 {
-	builder.Host.UseSystemd();
+    builder.Host.UseSystemd();
 }
 catch { /* optional: ignore if not available */ }
 
