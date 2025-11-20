@@ -1,6 +1,5 @@
-using Asionyx.Library.Shared.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
+using Asionyx.Library.Shared.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 

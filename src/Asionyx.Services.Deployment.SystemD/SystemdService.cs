@@ -37,13 +37,13 @@ public class SystemdService
 
         var serviceFilePath = $"/etc/systemd/system/{_serviceName}.service";
 
-            try
-            {
-                await File.WriteAllTextAsync(serviceFilePath, serviceContent);
-                // Emulate daemon-reload (noop in this file-backed emulator)
-                Console.WriteLine($"Service {_serviceName} created successfully at {serviceFilePath}");
-                return true;
-            }
+        try
+        {
+            await File.WriteAllTextAsync(serviceFilePath, serviceContent);
+            // Emulate daemon-reload (noop in this file-backed emulator)
+            Console.WriteLine($"Service {_serviceName} created successfully at {serviceFilePath}");
+            return true;
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Error creating service: {ex.Message}");

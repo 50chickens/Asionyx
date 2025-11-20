@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace Asionyx.Library.Shared.Diagnostics
 {
     public interface IAppDiagnostics

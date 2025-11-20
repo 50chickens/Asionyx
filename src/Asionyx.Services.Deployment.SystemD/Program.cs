@@ -1,6 +1,6 @@
+using System.Runtime.InteropServices;
 using Asionyx;
 using Asionyx.Library.Shared.Diagnostics;
-using System.Runtime.InteropServices;
 
 // Minimal CLI-only systemd emulator for integration tests.
 // - No TCP or sockets.
