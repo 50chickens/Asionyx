@@ -6,7 +6,7 @@ namespace Asionyx.Services.Deployment.Client.Tests;
 [TestFixture]
 public class ClientIntegrationTests
 {
-    [Test, Ignore("Scaffold - requires running deployment service")]
+    [Test]
     public async Task Client_Can_Call_Info()
     {
         using var client = new HttpClient();

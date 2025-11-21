@@ -12,8 +12,8 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\Asionyx.Services.Deployment\Asionyx.Services.Deployment.csproj" />
-    <ProjectReference Include="..\..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
-    <ProjectReference Include="..\..\Asionyx.Library.Testing\Asionyx.Library.Testing.csproj" />
+    <ProjectReference Include="..\Asionyx.Services.Deployment\Asionyx.Services.Deployment.csproj" />
+    <ProjectReference Include="..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
+    <ProjectReference Include="..\Asionyx.Library.Testing\Asionyx.Library.Testing.csproj" />
   </ItemGroup>
 </Project>

@@ -112,7 +112,9 @@ function Test-Integration {
     )
 
     Write-Host "Running integration tests" -ForegroundColor Green
-    dotnet test Asionyx.Services.Deployment.Client.Tests -c Release --no-build
+    # Run integration test project (contains all Docker-backed integration tests)
+    dotnet test Asionyx.Services.Deployment.IntegrationTests -c Release --no-build
+    # Run unit/in-memory tests
     dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
 }
 
