@@ -104,73 +104,73 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   - Shared helper code. (PRESENT)
 
 - Asionyx.Library.Core
-  - Core interfaces (e.g. `ISystemConfigurator`). (PRESENT)
+  # Project features
 
- - Asionyx.Services.Deployment.Docker (PRESENT)
-  - Dockerfile that publishes `Asionyx.Services.Deployment`, `Asionyx.Services.Deployment.SystemD`, and `Asionyx.Services.HelloWorld` into a runtime image and runs both systemd emulator and deployment service as separate processes. (IMPLEMENTED)
+  This file lists the features the solution is expected to provide and notes their current implementation status.
 
-- Asionyx.Services.Deployment.SystemD
-  - A small systemd-like emulator that can run as a daemon in the container and has the same command line options as the real systemctl command line tool. instead of using systemctl status, systemctl start/stop, systemctl reload-daemon  etc the command is Asionyx.Services.Deployment.SystemD start/stop/daemon-reload. (IMPLEMENTED)
-  - it also has the same configuration options as the real systemd. (IMPLEMENTED)
-  - Asionyx.Services.Deployment.Tests
-  -  - add a unit test for the middleware that is used to authenticate the api key. (IMPLEMENTED)
-  - Asionyx.Services.Deployment.Tests
-  -  - Integration test(s) that start the docker container and run tests against the service. there should be no tests that are ignored or skipped. all api endpoints have corresponding integration tests that perform the operations inside the application container. (IMPLEMENTED)
-  -  - The integration tests now use the Testcontainers-based test harness to start/stop containers and inject `API_KEY` into the container at start time. The test harness uses the local `testcontainers-dotnet` implementation in the workspace. (IMPLEMENTED)
-  -  - The integration test suite no longer relies on the orchestrator to inject `API_KEY`. The orchestrator (`build-test-and-deploy.ps1`) publishes and builds the image but does not start containers or set process environment variables for tests; the harness manages API key injection. (IMPLEMENTED)
-  -  - The integration test harness enforces a 60s readiness timeout for the container `/info` endpoint and writes concise start/finish/success logs to the NUnit output for diagnostics. (IMPLEMENTED)
+  For a feature to be considered implemented it should have:
 
- - Asionyx.Services.Deployment.Client
-  - Console client to call the deployment service. (PRESENT)
-  - it can call all of the endpoints that are hosted by the Asionyx.Services.Deployment service and with an --api-key (IMPLEMENTED)
+  - an API endpoint that performs the operation;
+  - an integration test that exercises the endpoint; and
+  - a corresponding client option in `Asionyx.Services.Deployment.Client` where applicable.
 
-- Asionyx.Services.Deployment.Client.Tests
-  - Integration tests for the client which connect to the container and call endpoints (present). (PRESENT)
-  - ensure all integration tests are using the testcontainers based tests. 
-CI
- - GitHub Actions workflow to build and run tests (unit/explicit skipped). (ADDED: `.github/workflows/ci.yml`)
+  ---
 
-- Other implementation notes / infra changes made
-- `build-test-and-deploy.ps1` was updated to fail-fast on `dotnet restore` / `dotnet build` failures so Docker image build is skipped if earlier steps fail. (IMPLEMENTED)
-- Docker image build updated to use official Microsoft images (`mcr.microsoft.com/dotnet/sdk:9.0` and `mcr.microsoft.com/dotnet/aspnet:9.0`) to avoid apt dependency issues. (IMPLEMENTED)
-- The image sets `ASPNETCORE_URLS=http://+:5000` so the deployment service listens on port 5000 inside the container. (IMPLEMENTED)
-- `Asionyx.Services.Deployment.Docker/entrypoint.sh` line endings are normalized inside the image to avoid shebang CRLF errors on Linux. (IMPLEMENTED)
-  - Build policy: the container image must NOT build the solution inside the image. The orchestrator (`build-test-and-deploy.ps1`) performs `dotnet restore` / `dotnet build` / `dotnet publish` outside the image and the Dockerfile copies only the published output into the runtime image. (IMPLEMENTED)
+  ## Implemented features (summary)
 
-Notes and next steps
-- Integration tests that rely on Docker/Testcontainers will only run in environments that have Docker and can restore the Testcontainers package. The tests are marked `Explicit` and will not run in default CI.
-- To get full systemd integration (so the host reacts to systemctl start/stop), add `Microsoft.Extensions.Hosting.Systemd` to `Asionyx.Services.Deployment` and remove the shim added in `Program.cs`.
-- If you want the orchestrator to run integration tests automatically, re-enable them and ensure the CI runner has Docker access and can restore Testcontainers.
+  - Asionyx.Services.Deployment (net9.0 Kestrel web service)
+    - Endpoints implemented and covered by integration tests:
+      - `GET /info` — returns application identity/version. (IMPLEMENTED)
+      - `GET /status` — returns service status. (IMPLEMENTED)
+      - `POST /systemd` — manage services (add/start/stop/remove/status). (IMPLEMENTED)
+      - `POST|GET /packages` — install/list/remove apt packages. (IMPLEMENTED)
+      - `POST|GET /filesystem/files` — write/read/delete files. (IMPLEMENTED)
+      - `POST /package` — accepts a `.nupkg`, unpacks to uploads, returns `manifest.json`. (IMPLEMENTED)
 
-todo -
+  - Asionyx.Services.HelloWorld — small sample service used by integration tests (exposes `/info`). (PRESENT)
+  - Asionyx.Services.Deployment.SystemD — systemd-like emulator used by the deployment service to manage HelloWorld. (PRESENT)
+  - Asionyx.Library.Core / Asionyx.Library.Shared — core interfaces and shared helpers used across projects. (PRESENT)
+  - Asionyx.Services.Deployment.Client — console client that can call the deployment endpoints (PRESENT)
 
-add: services.AddControllers().AddNewtonsoftJson(...) in Program.cs. (IMPLEMENTED)
-fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and have been addressed by removing the explicit PackageReference in `Directory.Build.props` so the SDK-provided analyzers are used. (IMPLEMENTED)
-wire MVC-formatting globally to Newtonsoft for consistent controller serialization:
-Add AddControllers().AddNewtonsoftJson(...) and verify controllers behavior. (IMPLEMENTED)
-sweep the repo for any remaining JSON serializer usages and prefer `Newtonsoft.Json` for controller and diagnostics serialization. (IMPLEMENTED)
-run the full orchestrator script (`./build-test-and-deploy.ps1`) to exercise the full E2E build/publish/dockering/orchestration flow (this will rebuild images and run tests). (IMPLEMENTED)
+  ---
 
+  ## Testing / integration rules
 
+  - Integration tests live in `Asionyx.Services.Deployment.IntegrationTests` and use a Testcontainers-based harness to start/stop the integration image and exercise endpoints. Tests are marked with `Category("Integration")`.
+  - The harness forwards container stdout/stderr to the NUnit output to aid debugging.
+  - Readiness: tests wait for the deployment image to become reachable at `/info`. The harness enforces a 60s readiness timeout for this endpoint.
+  - API key rules:
+    - Integration tests are responsible for injecting `X-API-KEY` into the container at start time; the orchestrator does NOT inject API keys.
+    - Tests must not rely on any container environment variables except for `API_KEY` used for authentication.
 
-```
-testing requirements and workflow:
+  ---
 
-Asionyx.Services.Deployment.Docker - this creates a docker image (i'll call it the intergration test container) that only contains -
-    - the published output of Asionyx.Services.Deployment. this is the docker container entrypoint. 
-    - the published output of Asionyx.Services.Deployment.SystemD. it should be installed into the container, but should not be started as a seperate background process to Asionyx.Services.Deployment. it should be called by command line only from Asionyx.Services.Deployment to a) create a unit file for Asionyx.Services.HelloWorld. and b) configure the Asionyx.Services.HelloWorld service and start it. so that we can integration test adding/removing/starting/stopping systemd services.
-    - the published output Asionyx.Services.HelloWorld. 
+  ## Orchestrator behavior
 
-The integration test sequence should be:
-    - the orchestration script runs.
-    - it publishes the contents of Asionyx.Services.Deployment, Asionyx.Services.Deployment.SystemD and Asionyx.Services.Deployment.Client to a publish folder.
-    - the integration test docker image is built. the contents of the 3 published folders only is copied into the container. 
-    - the integration tests run. 
-    - the integration test container is started using testcontainers.
-    - Asionyx.Services.Deployment adds a new service called Asionyx.Services.HelloWorld using the Asionyx.Services.Deployment.SystemD CLI tool - it creates Asionyx.Services.Helloworld by creating a new systemd unit file and then calling Asionyx.Services.Deployment.SystemD to start it. 
-    the Asionyx.Services.Hello work exposes an API endpoint - /info that we use to confirm the container has started. 
-    the container is considered ready when we can call the /info endpoint.
-    during the integration tests we should also call the /info endpoint of the deployment service named Asionyx.Services.Deployment to confirm it is also running. but this is not a requirement for the container ready section in the testcontainers startup.
-    finally we remove the Asionyx.Services.HelloWorld service using Asionyx.Services.Deployment.SystemD CLI tool.
-    the integration tests confirm that the service has been removed.
-The orchestration script should clean up all published folders and docker images after the tests are complete.
+  - `build-test-and-deploy.ps1` publishes projects to `src/publish`, then builds the Docker image (`asionyx/deployment:local`).
+  - Important: the orchestrator builds the image only — it does NOT start containers nor inject API keys into test processes.
+  - After integration tests run, the orchestrator always removes the built image and cleans up published folders.
+
+  ---
+
+  ## Diagnostics & instrumentation
+
+  - The service provides `IAppDiagnostics` / `FileDiagnostics` which persist structured JSON diagnostics for post-mortem analysis.
+  - Controllers and diagnostics serialization use `Newtonsoft.Json` for consistent JSON formatting across endpoints and diagnostics files.
+
+  ---
+
+  ## CI / notes
+
+  - Integration tests require a Docker-capable runner and Testcontainers support. In CI, ensure Docker is available and Testcontainers packages can be restored.
+  - If CI should run the orchestrator, grant the runner the necessary Docker permissions and adjust the workflow accordingly.
+
+  ---
+
+  ## Next steps (suggested)
+
+  - Keep `Asionyx.Services.Deployment.IntegrationTests` as the single source of truth for integration scenarios that require Docker.
+  - Optionally update CI to run the orchestrator on Docker-enabled runners.
+  - If you want, I can:
+    - update `src/FEATURES.md` to match this consolidated content as well, or
+    - open a PR with this change and a short changelog entry.
