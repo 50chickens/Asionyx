@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -20,7 +21,7 @@ public class ApiKeyEnforcementTests
         // Create a request that intentionally omits the X-API-KEY header
         var req = new HttpRequestMessage(HttpMethod.Post, "/packages")
         {
-            Content = new StringContent(string.Empty)
+            Content = new StringContent(string.Empty, Encoding.UTF8, "application/json")
         };
 
         var client = new HttpClient { BaseAddress = IntegrationTestSetup.Client.BaseAddress };
@@ -33,7 +34,7 @@ public class ApiKeyEnforcementTests
     public async Task Post_WithApiKey_IsNot401()
     {
         // Use the shared client which includes the injected ContainerApiKey header.
-        var resp = await IntegrationTestSetup.Client.PostAsync("/packages", new StringContent(string.Empty)).ConfigureAwait(false);
+        var resp = await IntegrationTestSetup.Client.PostAsync("/packages", new StringContent(string.Empty, Encoding.UTF8, "application/json")).ConfigureAwait(false);
         Assert.That(resp.StatusCode, Is.Not.EqualTo(HttpStatusCode.Unauthorized));
     }
 }

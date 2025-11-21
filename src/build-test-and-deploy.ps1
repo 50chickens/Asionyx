@@ -26,14 +26,14 @@ function Restore-Solution {
     )
 
     # local variables used in this function
-    $solution = 'Asionyx.sln'
+    $solutionFileName = $buildContext.solutionFileName
 
-    Write-Host "Restoring solution: $solution" -ForegroundColor Green
-    dotnet restore $solution
+    Write-Host "Restoring solution: $solutionFileName" -ForegroundColor Green
+    dotnet restore $solutionFileName
     if ($LASTEXITCODE -ne 0) { Write-Host "dotnet restore failed" -ForegroundColor Red; exit $LASTEXITCODE }
 
-    Write-Host "Building solution: $solution" -ForegroundColor Green
-    dotnet build $solution -c Release
+    Write-Host "Building solution: $solutionFileName" -ForegroundColor Green
+    dotnet build $solutionFileName -c Release
     if ($LASTEXITCODE -ne 0) { Write-Host "dotnet build failed" -ForegroundColor Red; exit $LASTEXITCODE }
 }
 
@@ -50,9 +50,9 @@ function Publish-Projects {
     if (Test-Path $publishRoot) { Remove-Item $publishRoot -Recurse -Force }
 
     $projects = @(
-        @{ Name = 'Asionyx.Services.Deployment'; Out = 'deployment'; Args = '' },
-        @{ Name = 'Asionyx.Services.Deployment.SystemD'; Out = 'systemd'; Args = '-r linux-x64 -p:PublishSingleFile=true -p:PublishTrimmed=false -p:SelfContained=true' },
-        @{ Name = 'Asionyx.Services.HelloWorld'; Out = 'helloworld'; Args = '' }
+        @{ Name = "$($buildContext.ProjectName).Services.Deployment"; Out = 'deployment'; Args = '' },
+        @{ Name = "$($buildContext.ProjectName).Services.Deployment.SystemD"; Out = 'systemd'; Args = '-r linux-x64 -p:PublishSingleFile=true -p:PublishTrimmed=false -p:SelfContained=true' },
+        @{ Name = "$($buildContext.ProjectName).Services.HelloWorld"; Out = 'helloworld'; Args = '' }
     )
 
     $projects | % {
@@ -110,12 +110,10 @@ function Test-Integration {
         [Parameter(Mandatory = $true)]
         $buildContext
     )
-
+    $solutionFileName = $buildContext.solutionFileName
     Write-Host "Running integration tests" -ForegroundColor Green
     # Run integration test project (contains all Docker-backed integration tests)
-    dotnet test Asionyx.Services.Deployment.IntegrationTests -c Release --no-build
-    # Run unit/in-memory tests
-    dotnet test Asionyx.Services.Deployment.Tests -c Release --no-build
+    dotnet test $solutionFileName -c Release --no-build    
 }
 
 function Save-LogsAndCleanup {
@@ -151,10 +149,12 @@ Set-Location $scriptDir
 
 # Centralized configuration (edit here)
 $PublishRoot = Join-Path $scriptDir 'publish'
-$DeploymentProjectPath = Join-Path $scriptDir 'Asionyx.Services.Deployment'
-$SystemdProjectPath = Join-Path $scriptDir 'Asionyx.Services.Deployment.SystemD'
-$HelloWorldProjectPath = Join-Path $scriptDir 'Asionyx.Services.HelloWorld'
-$Dockerfile = 'Asionyx.Services.Deployment.Docker/Dockerfile'
+$projectName = "Asionyx"
+$solutionFileName = "$($projectName).sln"
+$DeploymentProjectPath = Join-Path $scriptDir "$($projectName).Services.Deployment"
+$SystemdProjectPath = Join-Path $scriptDir "$($projectName).Services.Deployment.SystemD"
+$HelloWorldProjectPath = Join-Path $scriptDir "$($projectName).Services.HelloWorld"
+$Dockerfile = "$($projectName).Services.Deployment.Docker/Dockerfile"
 $DockerImage = 'asionyx/deployment:local'
 $ContainerName = 'asionyx_local'
 $HostPort = 5000
@@ -168,6 +168,7 @@ $InsecureTesting = $true
 $buildContext = [PSCustomObject]@{
     ScriptDir = $scriptDir
     PublishRoot = $PublishRoot
+    ProjectName = $projectName
     DeploymentProjectPath = $DeploymentProjectPath
     SystemdProjectPath = $SystemdProjectPath
     HelloWorldProjectPath = $HelloWorldProjectPath
@@ -179,6 +180,7 @@ $buildContext = [PSCustomObject]@{
     DiagnosticsToStdout = $DiagnosticsToStdout
     DiagnosticsDir = $DiagnosticsDir
     InsecureTesting = $InsecureTesting
+    solutionFileName = $solutionFileName
 }
 
 Restore-Solution -buildContext $buildContext

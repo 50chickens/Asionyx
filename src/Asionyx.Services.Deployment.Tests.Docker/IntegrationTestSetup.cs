@@ -32,7 +32,7 @@ public class IntegrationTestSetup
 
             // Use the repository's Testcontainers implementation (ContainerBuilder)
             // Enforce a 60 second readiness timeout via the wait strategy modifier.
-            _container = new ContainerBuilder()
+                _container = new ContainerBuilder()
                 .WithName("asionyx_integration_shared")
                 .WithImage("asionyx/deployment:local")
                 .WithCleanUp(true)
@@ -42,12 +42,28 @@ public class IntegrationTestSetup
                 .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
                 .WithWaitStrategy(Wait.ForUnixContainer()
                     .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
-                        waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(60))))
+                        waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
                 .Build();
 
             try
             {
-                _container.StartAsync().GetAwaiter().GetResult();
+                // Start the container with a cancellation token to enforce a hard timeout
+                var startTimeoutSeconds = 150; // default (120 + 30)
+                try
+                {
+                    var envTimeout = Environment.GetEnvironmentVariable("TEST_CONTAINER_START_TIMEOUT_SECONDS");
+                    if (!string.IsNullOrWhiteSpace(envTimeout) && int.TryParse(envTimeout, out var parsed))
+                    {
+                        startTimeoutSeconds = parsed;
+                    }
+                }
+                catch { }
+
+                using (var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(startTimeoutSeconds)))
+                {
+                    _container.StartAsync(cts.Token).GetAwaiter().GetResult();
+                }
+
                 _startedContainer = true;
 
                 var mappedPort = _container.GetMappedPublicPort(5000);
@@ -147,7 +163,7 @@ public class IntegrationTestSetup
     }
 
     // Wait for /info to become available. Used by tests to ensure readiness.
-    public static async Task EnsureInfoAvailableAsync(int timeoutSeconds = 60)
+    public static async Task EnsureInfoAvailableAsync(int timeoutSeconds = 90)
     {
         if (Client == null) throw new InvalidOperationException("HttpClient not initialized");
         var attempts = Math.Max(1, timeoutSeconds);

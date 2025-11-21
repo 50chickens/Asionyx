@@ -184,6 +184,10 @@ builder.ConfigureContainer<ContainerBuilder>((context, containerBuilder) =>
     // Register core implementations here. Keep it minimal for the scaffold.
     containerBuilder.RegisterType<LocalSystemConfigurator>().As<ISystemConfigurator>().SingleInstance();
 
+    // Make IConfiguration available in the Autofac container so modules and components
+    // can resolve logging levels and other settings from appsettings.json.
+    containerBuilder.RegisterInstance(context.Configuration).As<Microsoft.Extensions.Configuration.IConfiguration>().SingleInstance();
+
     // Register logging module which configures NLog from appsettings.json and exposes ILog<T>
     containerBuilder.RegisterModule(new Asionyx.Services.Deployment.Logging.LoggingModule(context.Configuration));
 });
