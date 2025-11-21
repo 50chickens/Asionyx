@@ -4,20 +4,24 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-  <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="NUnit" Version="4.4.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.2.0" />
-  <PackageReference Include="Testcontainers" Version="4.8.1" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
-  <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-  <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Asionyx.Services.Deployment\Asionyx.Services.Deployment.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
   </ItemGroup>
   <ItemGroup>
-    
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Exclude legacy stubs that were moved to the IntegrationTests project -->
+    <Compile Remove="DeploymentIntegrationTests.cs" />
+    <Compile Remove="IntegrationTestSetup.cs" />
+    <Compile Remove="TestHelpers.cs" />
   </ItemGroup>
   <!-- Integration tests that require docker/testcontainers are included but marked Explicit so they are
     not executed during normal CI runs. The tests will only run when explicitly requested (orchestrator).

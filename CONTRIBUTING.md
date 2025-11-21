@@ -34,13 +34,13 @@ From the repository root (this file is next to `src/`):
 - Restore and build:
 
 ```pwsh
-Set-Location -LiteralPath './src'; ./orchestrate.ps1
+Set-Location -LiteralPath './src'; ./build-test-and-deploy.ps1
 ```
 
 - Run the orchestrator (build + image + container-based tests):
 
 ```pwsh
-Set-Location -LiteralPath './src'; ./orchestrate.ps1
+Set-Location -LiteralPath './src'; ./build-test-and-deploy.ps1
 ```
 
 - Format check (CI uses this):

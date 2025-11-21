@@ -4,8 +4,8 @@ var baseUrl = "http://localhost:5000";
 // simple argument parsing: client [command] [args...]
 // commands: info, status, systemd <action> <name>
 string command = args.Length > 0 ? args[0].ToLowerInvariant() : "info";
-// read api key either from env var or from --api-key <key> argument
-var apiKey = Environment.GetEnvironmentVariable("API_KEY");
+// read api key from --api-key <key> argument (do not rely on environment variable)
+string? apiKey = null;
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--api-key" && i + 1 < args.Length) { apiKey = args[i + 1]; }

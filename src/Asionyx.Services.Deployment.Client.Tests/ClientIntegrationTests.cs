@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
+namespace Asionyx.Services.Deployment.Client.Tests;
 [TestFixture]
 public class ClientIntegrationTests
 {

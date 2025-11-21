@@ -17,17 +17,12 @@ namespace Asionyx.Services.Deployment.Tests;
 [TestFixture]
 public class ApiKeyMiddlewareTests
 {
-    [SetUp]
-    public void SetUp()
+    class TestApiKeyService : IApiKeyService
     {
-        // Ensure deterministic API key for the lifetime of the factory
-        Environment.SetEnvironmentVariable("API_KEY", "test-key");
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        Environment.SetEnvironmentVariable("API_KEY", null);
+        private readonly string _key;
+        public TestApiKeyService(string key) { _key = key; }
+        public Task<string> EnsureApiKeyAsync() => Task.FromResult(_key);
+        public bool Validate(string provided) => string.Equals(provided, _key, StringComparison.Ordinal);
     }
 
     [Test]
@@ -37,8 +32,7 @@ public class ApiKeyMiddlewareTests
         // but exposes a simple POST endpoint that returns plain text (avoids MVC JSON output issues).
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
         builder.WebHost.UseTestServer();
-        builder.Services.AddDataProtection();
-        builder.Services.AddSingleton<IApiKeyService, ApiKeyService>();
+        builder.Services.AddSingleton<IApiKeyService>(new TestApiKeyService("test-key"));
 
         var app = builder.Build();
 

@@ -33,7 +33,7 @@ for a feature to be considered implemented it needs to have -
 
 ## Packaging / Runtime
 
-- The orchestrator (`orchestrate.ps1`) publishes projects outside the image; the Dockerfile copies published output into a minimal runtime image. (IMPLEMENTED)
+- The orchestrator (`build-test-and-deploy.ps1`) publishes projects outside the image; the Dockerfile copies published output into a minimal runtime image. (IMPLEMENTED)
 - Build policy: the container image must NOT build the solution inside the image; publishing is done outside the image. (IMPLEMENTED)
 
 ## Diagnostics
@@ -90,7 +90,7 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
     - API key storage and lifecycle are now handled by a dedicated `IApiKeyService` which centralises the logic. (IMPLEMENTED)
     - The service prefers the environment variable `API_KEY` (highest precedence). If absent it will attempt to read and decrypt the API key from `/etc/asionyx_api_key`. (IMPLEMENTED)
     - If no key is present the service generates a random key and persists an encrypted copy to `/etc/asionyx_api_key` using ASP.NET Core Data Protection (encryption-at-rest). (IMPLEMENTED)
-    - The orchestrator (`orchestrate.ps1`) will generate an API key for integration runs and inject it into the container (`-e API_KEY=...`) and into the test process so integration tests authenticate correctly. (IMPLEMENTED)
+    - The orchestrator (`build-test-and-deploy.ps1`) publishes projects and builds the Docker image but does NOT start containers or inject `API_KEY` into the test process. Integration tests and the test harness are responsible for starting test containers and injecting `API_KEY` into the container at start time. (IMPLEMENTED)
     - Note: encryption-at-rest uses the ASP.NET Core Data Protection stack; the key-ring location and protection lifetime are the platform defaults. For production you should configure key persistence and rotation per your security policies.
 
   - Integrates with a systemd-style lifecycle so it can be started/stopped under systemd. (IMPLEMENTED)
@@ -98,7 +98,7 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   - When running in the provided Docker integration image we emulate systemd using the `Asionyx.Services.Deployment.SystemD` emulator. (IMPLEMENTED)
   - On startup the service attempts to invoke the systemd emulator CLI to start `Asionyx.Services.HelloWorld`. (IMPLEMENTED)
 
-  - Diagnostics: a lightweight in-process diagnostics writer that persists structured JSON files for post-mortem inspection (e.g. `/var/asionyx/diagnostics/<name>.json`). This will be provided as an `IAppDiagnostics` and `FileDiagnostics` implementation that uses `Newtonsoft.Json` and atomic file writes. (PENDING)
+  - Diagnostics: a lightweight in-process diagnostics writer that persists structured JSON files for post-mortem inspection (e.g. `/var/asionyx/diagnostics/<name>.json`). This is provided as `IAppDiagnostics` and `FileDiagnostics` using `Newtonsoft.Json` and atomic file writes. (IMPLEMENTED)
 
 - Asionyx.Library.Shared
   - Shared helper code. (PRESENT)
@@ -116,8 +116,9 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   -  - add a unit test for the middleware that is used to authenticate the api key. (IMPLEMENTED)
   - Asionyx.Services.Deployment.Tests
   -  - Integration test(s) that start the docker container and run tests against the service. there should be no tests that are ignored or skipped. all api endpoints have corresponding integration tests that perform the operations inside the application container. (IMPLEMENTED)
-  -  - The integration test has been implemented to use the Docker CLI to start/stop the container and poll the `/info` endpoint (avoids the previous Testcontainers package dependency). This requires Docker to be available on the test runner. (IMPLEMENTED)
-  -  - the integration test suite expects the orchestrator to inject `API_KEY` into the container and into the test process; the tests then send `X-API-KEY` on protected endpoints. Running the tests directly (without setting `API_KEY` in the test environment and passing it into the container) will cause authentication failures. (IMPLEMENTED)
+  -  - The integration tests now use the Testcontainers-based test harness to start/stop containers and inject `API_KEY` into the container at start time. The test harness uses the local `testcontainers-dotnet` implementation in the workspace. (IMPLEMENTED)
+  -  - The integration test suite no longer relies on the orchestrator to inject `API_KEY`. The orchestrator (`build-test-and-deploy.ps1`) publishes and builds the image but does not start containers or set process environment variables for tests; the harness manages API key injection. (IMPLEMENTED)
+  -  - The integration test harness enforces a 60s readiness timeout for the container `/info` endpoint and writes concise start/finish/success logs to the NUnit output for diagnostics. (IMPLEMENTED)
 
  - Asionyx.Services.Deployment.Client
   - Console client to call the deployment service. (PRESENT)
@@ -130,13 +131,11 @@ CI
  - GitHub Actions workflow to build and run tests (unit/explicit skipped). (ADDED: `.github/workflows/ci.yml`)
 
 - Other implementation notes / infra changes made
-- `orchestrate.ps1` was updated to fail-fast on `dotnet restore` / `dotnet build` failures so Docker image build is skipped if earlier steps fail. (IMPLEMENTED)
+- `build-test-and-deploy.ps1` was updated to fail-fast on `dotnet restore` / `dotnet build` failures so Docker image build is skipped if earlier steps fail. (IMPLEMENTED)
 - Docker image build updated to use official Microsoft images (`mcr.microsoft.com/dotnet/sdk:9.0` and `mcr.microsoft.com/dotnet/aspnet:9.0`) to avoid apt dependency issues. (IMPLEMENTED)
 - The image sets `ASPNETCORE_URLS=http://+:5000` so the deployment service listens on port 5000 inside the container. (IMPLEMENTED)
 - `Asionyx.Services.Deployment.Docker/entrypoint.sh` line endings are normalized inside the image to avoid shebang CRLF errors on Linux. (IMPLEMENTED)
-  - the CI progress should: (PENDING)
-
-- Build policy: the container image must NOT build the solution inside the image. The repository `orchestrate.ps1` (or CI job) must perform a full `dotnet restore` / `dotnet build` / `dotnet publish` outside the image and the Dockerfile should copy only the published output into a minimal runtime image. (PENDING)
+  - Build policy: the container image must NOT build the solution inside the image. The orchestrator (`build-test-and-deploy.ps1`) performs `dotnet restore` / `dotnet build` / `dotnet publish` outside the image and the Dockerfile copies only the published output into the runtime image. (IMPLEMENTED)
 
 Notes and next steps
 - Integration tests that rely on Docker/Testcontainers will only run in environments that have Docker and can restore the Testcontainers package. The tests are marked `Explicit` and will not run in default CI.
@@ -146,11 +145,11 @@ Notes and next steps
 todo -
 
 add: services.AddControllers().AddNewtonsoftJson(...) in Program.cs. (IMPLEMENTED)
-fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and can be resolved by updating/removing that package reference. (PENDING)
+fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and have been addressed by removing the explicit PackageReference in `Directory.Build.props` so the SDK-provided analyzers are used. (IMPLEMENTED)
 wire MVC-formatting globally to Newtonsoft for consistent controller serialization:
 Add AddControllers().AddNewtonsoftJson(...) and verify controllers behavior. (IMPLEMENTED)
 sweep the repo for any remaining JSON serializer usages and prefer `Newtonsoft.Json` for controller and diagnostics serialization. (IMPLEMENTED)
-run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will rebuild images and run tests). (PENDING)
+run the full orchestrator script (`./build-test-and-deploy.ps1`) to exercise the full E2E build/publish/dockering/orchestration flow (this will rebuild images and run tests). (IMPLEMENTED)
 
 
 

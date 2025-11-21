@@ -1,4 +1,4 @@
-name: Orchestrator CI
+name: Build-And-Test  
 
 on:
   workflow_dispatch:
@@ -13,12 +13,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
-      - name: Run orchestrator (build + docker + tests)
+      - name: Build and Test
         shell: pwsh
         run: |
-          Set-Location -LiteralPath '${{ github.workspace }}/src'
-          ./orchestrate.ps1 -NonInteractive
+          Set-Location -LiteralPath "${{ github.workspace }}/src"
+          ./build-test-and-deploy.ps1

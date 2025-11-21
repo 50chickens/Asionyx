@@ -31,7 +31,7 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
     - API key storage and lifecycle are now handled by a dedicated `IApiKeyService` which centralises the logic. (IMPLEMENTED)
     - The service prefers the environment variable `API_KEY` (highest precedence). If absent it will attempt to read and decrypt the API key from `/etc/asionyx_api_key`. (IMPLEMENTED)
     - If no key is present the service generates a random key and persists an encrypted copy to `/etc/asionyx_api_key` using ASP.NET Core Data Protection (encryption-at-rest). (IMPLEMENTED)
-    - The orchestrator (`orchestrate.ps1`) will generate an API key for integration runs and inject it into the container (`-e API_KEY=...`) and into the test process so integration tests authenticate correctly. (IMPLEMENTED)
+    - The orchestrator (`build-test-and-deploy.ps1`) publishes projects and builds the Docker image but does NOT start containers or inject `API_KEY` into the test process. Integration tests and the test harness are responsible for starting test containers and injecting `API_KEY` into the container at start time. (IMPLEMENTED)
     - Note: encryption-at-rest uses the ASP.NET Core Data Protection stack; the key-ring location and protection lifetime are the platform defaults. For production you should configure key persistence and rotation per your security policies.
 
   - Integrates with a systemd-style lifecycle so it can be started/stopped under systemd. (IMPLEMENTED)
@@ -54,9 +54,11 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   - Asionyx.Services.Deployment.Tests
   -  - add a unit test for the middleware that is used to authenticate the api key. (IMPLEMENTED)
   - Asionyx.Services.Deployment.Tests
-  -  - Integration test(s) that start the docker container and run tests against the service. there should be no tests that are ignored or skipped. all api endpoints have corresponding integration tests that perform the operations inside the application container. (IMPLEMENTED)
-  -  - The integration test has been implemented to use the Docker CLI to start/stop the container and poll the `/info` endpoint (avoids the previous Testcontainers package dependency). This requires Docker to be available on the test runner. (IMPLEMENTED)
-  -  - the integration test suite expects the orchestrator to inject `API_KEY` into the container and into the test process; the tests then send `X-API-KEY` on protected endpoints. Running the tests directly (without setting `API_KEY` in the test environment and passing it into the container) will cause authentication failures. (IMPLEMENTED)
+  -  - Integration test(s) use the Testcontainers-based test harness to start/stop containers and inject `API_KEY` into the container at start time. There are no hard-coded `TEST_*` environment variables used by the tests. (IMPLEMENTED)
+  -  - Integration tests were reorganized: the previous monolithic `DeploymentIntegrationTests` was split into endpoint-focused test classes (e.g. `InfoTests`, `StatusTests`, `SystemdTests`, `PackagesTests`, `FilesystemTests`, `PackageUploadTests`) that share a single `HttpClient` and a test-wide `SetUpFixture` (`IntegrationTestSetup`) which starts the container. (IMPLEMENTED)
+  -  - The test harness now exposes a structured `ExecResult` from container exec calls (`ExitCode`, `Stdout`, `Stderr`) and the old `TestContainerName` test property was removed to reduce unused surface area. (IMPLEMENTED)
+  -  - The orchestrator (`build-test-and-deploy.ps1`) publishes projects and builds the Docker image but does not start containers or inject `API_KEY`. The test harness manages container lifecycle and API-key injection. (IMPLEMENTED)
+  -  - The integration test harness enforces a 60s readiness timeout for the `/info` endpoint and emits concise start/finish logs to the NUnit console to aid diagnostics. (IMPLEMENTED)
 
  - Asionyx.Services.Deployment.Client
   - Console client to call the deployment service. (PRESENT)
@@ -80,13 +82,11 @@ Notes and next steps
 - To get full systemd integration (so the host reacts to systemctl start/stop), add `Microsoft.Extensions.Hosting.Systemd` to `Asionyx.Services.Deployment` and remove the shim added in `Program.cs`.
 - If you want the orchestrator to run integration tests automatically, re-enable them and ensure the CI runner has Docker access and can restore Testcontainers.
 
-todo -
-
 add: services.AddControllers().AddNewtonsoftJson(...) in Program.cs. (IMPLEMENTED)
- fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and can be resolved by updating/removing that package reference. (IMPLEMENTED)
+fix warnings about the Microsoft.CodeAnalysis.NetAnalyzers package version mismatch (pre-existing). These are non-blocking and can be resolved by updating/removing that package reference. (IMPLEMENTED)
 wire MVC-formatting globally to Newtonsoft for consistent controller serialization:
 Add AddControllers().AddNewtonsoftJson(...) and verify controllers behavior. (IMPLEMENTED)
 sweep the repo for any remaining JSON serializer usage and prefer `Newtonsoft.Json` for controller and diagnostics serialization. (IMPLEMENTED)
- run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will publish projects outside the image, build the image from published output, and run tests). (IMPLEMENTED)
+run the full orchestrator script (./orchestrate.ps1) to exercise the full E2E build/publish/dockering/orchestration flow (this will publish projects outside the image, build the image from published output, and run tests). (IMPLEMENTED)
 
 
