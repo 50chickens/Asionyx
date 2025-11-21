@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Asionyx.Services.Deployment
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Asionyx.Services.HelloWorld", "Asionyx.Services.HelloWorld\Asionyx.Services.HelloWorld.csproj", "{FDE5C9B1-FFD0-4DF2-8368-8483BE8ACBF8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Asionyx.Services.Deployment.Tests.Docker", "Asionyx.Services.Deployment.Tests.Docker\Asionyx.Services.Deployment.Tests.Docker.csproj", "{022B9183-8C74-21F2-5BEB-EB76DEAB098A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -125,6 +127,18 @@ Global
 		{FDE5C9B1-FFD0-4DF2-8368-8483BE8ACBF8}.Release|x64.Build.0 = Release|Any CPU
 		{FDE5C9B1-FFD0-4DF2-8368-8483BE8ACBF8}.Release|x86.ActiveCfg = Release|Any CPU
 		{FDE5C9B1-FFD0-4DF2-8368-8483BE8ACBF8}.Release|x86.Build.0 = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|x64.Build.0 = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Debug|x86.Build.0 = Debug|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|x64.ActiveCfg = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|x64.Build.0 = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|x86.ActiveCfg = Release|Any CPU
+		{022B9183-8C74-21F2-5BEB-EB76DEAB098A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

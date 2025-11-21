@@ -14,6 +14,8 @@ public class IntegrationTestSetup
     // Public static properties replace TEST_* environment variables.
     public static string TestHostPort { get; private set; }
     public static System.Net.Http.HttpClient Client { get; private set; }
+    // The API key injected into the container at start time. Tests can use this when calling protected endpoints.
+    public static string ContainerApiKey { get; private set; }
 
     // Structured exec result for commands run inside the container.
     public record ExecResult(long ExitCode, string Stdout, string Stderr);
@@ -26,6 +28,7 @@ public class IntegrationTestSetup
             TestContext.Progress.WriteLine("Starting container setup...");
 
             var apiKey = Guid.NewGuid().ToString("N");
+            ContainerApiKey = apiKey;
 
             // Use the repository's Testcontainers implementation (ContainerBuilder)
             // Enforce a 60 second readiness timeout via the wait strategy modifier.
@@ -56,21 +59,13 @@ public class IntegrationTestSetup
                 var baseAddress = new Uri($"http://localhost:{TestHostPort}");
                 Client = new System.Net.Http.HttpClient { BaseAddress = baseAddress };
 
-                // Attempt to read the API key from the container; if found, add it as a default header.
+                // Ensure the client includes the API key we injected into the container.
                 try
                 {
-                    var containerApiKey = string.Empty;
-                    for (int i = 0; i < 30; i++)
+                    if (!string.IsNullOrWhiteSpace(ContainerApiKey))
                     {
-                        var keyExec = ExecInContainerAsync(new[] { "/bin/sh", "-c", "cat /etc/asionyx_api_key" }).GetAwaiter().GetResult();
-                        if (keyExec != null && keyExec.ExitCode == 0 && !string.IsNullOrWhiteSpace(keyExec.Stdout))
-                        {
-                            containerApiKey = keyExec.Stdout.Trim();
-                            break;
-                        }
-                        System.Threading.Thread.Sleep(500);
+                        Client.DefaultRequestHeaders.Add("X-API-KEY", ContainerApiKey);
                     }
-                    if (!string.IsNullOrWhiteSpace(containerApiKey)) Client.DefaultRequestHeaders.Add("X-API-KEY", containerApiKey);
                 }
                 catch { }
             }

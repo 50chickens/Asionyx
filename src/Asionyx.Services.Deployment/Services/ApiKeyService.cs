@@ -6,11 +6,11 @@ namespace Asionyx.Services.Deployment.Services;
 public class ApiKeyService : IApiKeyService
 {
     private readonly IDataProtector _protector;
-    private readonly ILogger<ApiKeyService> _logger;
+    private readonly ILog<ApiKeyService> _logger;
     private readonly string _etcPath = "/etc/asionyx_api_key";
     private string? _plainKey;
 
-    public ApiKeyService(IDataProtectionProvider provider, ILogger<ApiKeyService> logger)
+    public ApiKeyService(IDataProtectionProvider provider, ILog<ApiKeyService> logger)
     {
         _protector = provider.CreateProtector("Asionyx.ApiKey.v1");
         _logger = logger;
@@ -36,7 +36,7 @@ public class ApiKeyService : IApiKeyService
         if (!string.IsNullOrWhiteSpace(env))
         {
             _plainKey = env;
-            _logger.LogDebug("Using API key from environment");
+            _logger.Debug("Using API key from environment");
             // Do not persist environment-provided key here (respect env precedence)
             return _plainKey;
         }
@@ -53,13 +53,13 @@ public class ApiKeyService : IApiKeyService
                     {
                         var unprotected = _protector.Unprotect(stored);
                         _plainKey = unprotected;
-                        _logger.LogDebug("Loaded API key from encrypted file");
+                        _logger.Debug("Loaded API key from encrypted file");
                         return _plainKey;
                     }
                     catch (Exception ex)
                     {
                         // If unprotect fails, attempt to use stored plain text (legacy)
-                        _logger.LogWarning(ex, "Failed to unprotect API key file, attempting to use raw content");
+                        _logger.Error(ex, "Failed to unprotect API key file, attempting to use raw content");
                         _plainKey = stored.Trim();
                         return _plainKey;
                     }
@@ -68,23 +68,23 @@ public class ApiKeyService : IApiKeyService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error reading API key from disk");
+            _logger.Error(ex, "Error reading API key from disk");
         }
 
         // 3) generate and persist (encrypted) if possible
         _plainKey = Guid.NewGuid().ToString("N");
-        try
-        {
-            var protectedValue = _protector.Protect(_plainKey);
-            var dir = Path.GetDirectoryName(_etcPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            await File.WriteAllTextAsync(_etcPath, protectedValue);
-            _logger.LogInformation("Generated and persisted encrypted API key to {Path}", _etcPath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to persist encrypted API key to disk; continuing with in-memory key");
-        }
+            try
+            {
+                var protectedValue = _protector.Protect(_plainKey);
+                var dir = Path.GetDirectoryName(_etcPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                await File.WriteAllTextAsync(_etcPath, protectedValue);
+                _logger.Info($"Generated and persisted encrypted API key to {_etcPath}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to persist encrypted API key to disk; continuing with in-memory key");
+            }
 
         return _plainKey;
     }

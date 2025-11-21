@@ -205,3 +205,13 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
     - Keep `Asionyx.Services.Deployment.IntegrationTests` as the authoritative source for integration scenarios that require Docker.
     - Consider updating the GitHub Actions workflow to run integration tests only on Docker-enabled runners, or gate them behind an explicit matrix run.
     - I can synchronize the repo root `FEATURES.md` with this file, open a PR for these documentation changes, or run a focused test or the orchestrator if you want validation.
+
+    ## Improvements (Planned / In-Progress)
+
+    - **Correlation ID middleware:** add a middleware that generates or forwards a `X-Correlation-ID` header for every request and ensures it is included in logs and forwarded to downstream calls.
+    - **Health endpoint:** provide `GET /healthz` returning simple JSON `{ "status": "ok" }` and use it for lightweight health checks (distinct from `/info`).
+    - **API-key enforcement integration test:** add an integration test that verifies endpoints (e.g., POST to `/packages` or POST to `/systemd`) return `401 Unauthorized` when `X-API-KEY` is missing and succeed when the correct key is provided by the test harness.
+    - **CI gating for integration tests:** ensure integration tests only run on Docker-capable runners or behind a matrix flag; consider artifact upload on failure for diagnostics.
+    - **Observability improvements:** ensure container stdout/stderr are forwarded to test logs (already implemented) and wire correlation-id into diagnostics outputs.
+
+    These items are being implemented incrementally. Code changes for correlation-id middleware, `GET /healthz`, and the API-key enforcement integration test are in progress; one documentation patch was previously attempted and re-applied here.

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Asionyx.Library.Core;
 using Asionyx.Library.Shared.Diagnostics;
 using Asionyx.Services.Deployment.Services;
+using Asionyx.Services.Deployment.Middleware;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Newtonsoft.Json;
@@ -58,6 +59,9 @@ var builder = Host.CreateDefaultBuilder(args)
         {
             var env = ctx.HostingEnvironment;
             if (env.IsDevelopment()) app.UseDeveloperExceptionPage();
+
+            // Ensure every request has a correlation id for observability
+            app.UseCorrelationId();
 
             // Exception-logging middleware: capture unhandled exceptions and persist
             // a diagnostics JSON file for post-mortem inspection.
@@ -172,10 +176,13 @@ var builder = Host.CreateDefaultBuilder(args)
     .ConfigureLogging((context, logging) => { /* logging configured by NLog */ })
     .UseNLog();
 
-builder.ConfigureContainer<ContainerBuilder>(containerBuilder =>
+builder.ConfigureContainer<ContainerBuilder>((context, containerBuilder) =>
 {
     // Register core implementations here. Keep it minimal for the scaffold.
     containerBuilder.RegisterType<LocalSystemConfigurator>().As<ISystemConfigurator>().SingleInstance();
+
+    // Register logging module which configures NLog from appsettings.json and exposes ILog<T>
+    containerBuilder.RegisterModule(new Asionyx.Services.Deployment.Logging.LoggingModule(context.Configuration));
 });
 
 var appHost = builder.Build();
