@@ -328,27 +328,6 @@ internal class Program
                 result[section][key] = val;
             }
             return result;
-
-            static (string file, string args) SplitExecStart(string execStart)
-            {
-                var trimmed = execStart.Trim();
-                if (trimmed.Length > 0 && trimmed[0] == '-') trimmed = trimmed.Substring(1).TrimStart();
-                if (trimmed.StartsWith("\""))
-                {
-                    var end = trimmed.IndexOf('"', 1);
-                    if (end > 1)
-                    {
-                        var file = trimmed.Substring(1, end - 1);
-                        var args = trimmed.Substring(end + 1).Trim();
-                        return (file, args);
-                    }
-                }
-                var firstSpace = trimmed.IndexOf(' ');
-                if (firstSpace <= 0) return (trimmed, string.Empty);
-                var f = trimmed.Substring(0, firstSpace);
-                var a = trimmed.Substring(firstSpace + 1).Trim();
-                return (f, a);
-            }
         }
     }
 }

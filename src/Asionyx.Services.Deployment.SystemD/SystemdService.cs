@@ -14,7 +14,7 @@ public class SystemdService
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
-    public async Task<bool> CreateServiceAsync(string execStart, string description, string workingDirectory = null, string restart = null, int? restartSec = null, string type = null)
+    public async Task<bool> CreateServiceAsync(string execStart, string description, string? workingDirectory = null, string? restart = null, int? restartSec = null, string? type = null)
     {
         var config = new ServiceConfiguration
         {
