@@ -10,10 +10,19 @@ public class ApiKeyService : IApiKeyService
     private readonly string _etcPath = "/etc/asionyx_api_key";
     private string? _plainKey;
 
+    // Parameterless-logger constructor: allows DI to construct this service when
+    // `ILog<ApiKeyService>` is not registered (common in lightweight test hosts).
+    public ApiKeyService(IDataProtectionProvider provider)
+    {
+        _protector = provider.CreateProtector("Asionyx.ApiKey.v1");
+        _logger = Asionyx.Library.Core.LogManager.GetLogger<ApiKeyService>();
+    }
+
+    // Full constructor used when an `ILog<T>` implementation is provided by DI.
     public ApiKeyService(IDataProtectionProvider provider, ILog<ApiKeyService> logger)
     {
         _protector = provider.CreateProtector("Asionyx.ApiKey.v1");
-        _logger = logger;
+        _logger = logger ?? Asionyx.Library.Core.LogManager.GetLogger<ApiKeyService>();
     }
 
     public bool Validate(string provided)

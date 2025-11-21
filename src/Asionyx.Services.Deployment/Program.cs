@@ -36,6 +36,9 @@ var builder = Host.CreateDefaultBuilder(args)
             services.AddOptions();
             services.AddDataProtection();
             services.AddSingleton<IApiKeyService, ApiKeyService>();
+            // Ensure ILog<T> is available from the default DI container so tests that build
+            // a Host without Autofac can still resolve loggers.
+            services.AddSingleton(typeof(Asionyx.Library.Core.ILog<>), typeof(Asionyx.Library.Core.NLogLoggerCore<>));
             // Register diagnostics writer. Directory can be overridden via configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
             services.AddSingleton<IAppDiagnostics>(sp =>
             {

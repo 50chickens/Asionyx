@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace Asionyx.Library.Testing;
 
-public static class TestHelpers
+public class TestHelpers
 {
     // Temporarily remove the X-API-KEY header, run the action, then restore header values.
-    public static async Task<T> RunWithoutApiKeyAsync<T>(HttpClient client, Func<Task<T>> action)
+    public async Task<T> RunWithoutApiKeyAsync<T>(HttpClient client, Func<Task<T>> action)
     {
         if (client == null) throw new ArgumentNullException(nameof(client));
         var hadHeader = client.DefaultRequestHeaders.Contains("X-API-KEY");
@@ -33,7 +33,7 @@ public static class TestHelpers
     }
 
     // Create a small test nupkg (zip) containing a manifest.json and return the path.
-    public static string CreateTestNupkg(string name = "testpkg")
+    public string CreateTestNupkg(string name = "testpkg")
     {
         var tmp = Path.GetTempPath();
         var pkgDir = Path.Combine(tmp, "asionyx_pkg_test");
@@ -49,7 +49,7 @@ public static class TestHelpers
 
     // Create a MultipartFormDataContent for the provided nupkg path and return the content and open FileStream.
     // Caller is responsible for disposing both returned values.
-    public static (MultipartFormDataContent Form, FileStream Stream) CreatePackageForm(string nupkgPath)
+    public (MultipartFormDataContent Form, FileStream Stream) CreatePackageForm(string nupkgPath)
     {
         var form = new MultipartFormDataContent();
         var fs = File.OpenRead(nupkgPath);

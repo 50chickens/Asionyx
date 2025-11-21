@@ -39,7 +39,7 @@ public class DeploymentIntegrationTests
         var statusResp = await Client.GetAsync("/status");
         if (!statusResp.IsSuccessStatusCode && statusResp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            statusResp = await TestHelpers.RunWithoutApiKeyAsync(Client, () => Client.GetAsync("/status"));
+            statusResp = await new TestHelpers().RunWithoutApiKeyAsync(Client, () => Client.GetAsync("/status"));
         }
         statusResp.EnsureSuccessStatusCode();
         var statusBody = await statusResp.Content.ReadAsStringAsync();
@@ -102,8 +102,8 @@ public class DeploymentIntegrationTests
     [Test]
     public async Task Package_Upload()
     {
-        var nupkgPath = TestHelpers.CreateTestNupkg();
-        var (form, fs) = TestHelpers.CreatePackageForm(nupkgPath);
+        var nupkgPath = new TestHelpers().CreateTestNupkg();
+        var (form, fs) = new TestHelpers().CreatePackageForm(nupkgPath);
         using (form)
         using (fs)
         {
