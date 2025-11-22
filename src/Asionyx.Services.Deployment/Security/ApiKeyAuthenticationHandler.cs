@@ -17,10 +17,9 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        ISystemClock clock,
         IConfiguration configuration,
         IApiKeyService? apiKeyService = null)
-        : base(options, logger, encoder, clock)
+        : base(options, logger, encoder)
     {
         _configuration = configuration;
         _apiKeyService = apiKeyService;

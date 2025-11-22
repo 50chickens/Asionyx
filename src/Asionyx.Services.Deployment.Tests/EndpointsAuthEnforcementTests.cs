@@ -47,6 +47,7 @@ namespace Asionyx.Services.Deployment.Tests
                             options.DefaultChallengeScheme = Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName;
                         }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler>(
                             Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options => { });
+                        services.AddSingleton<TimeProvider>(TimeProvider.System);
                         services.AddSingleton<ISystemConfigurator, TestSystemConfigurator>();
                         services.AddSingleton<IApiKeyService>(new TestApiKeyService("valid-key"));
                         services.AddSingleton(typeof(ILog<>), typeof(NLogLoggerCore<>));

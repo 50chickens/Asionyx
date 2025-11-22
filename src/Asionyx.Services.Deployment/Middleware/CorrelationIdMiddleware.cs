@@ -28,20 +28,10 @@ namespace Asionyx.Services.Deployment.Middleware
 
             context.Response.Headers[HeaderName] = correlationId;
 
-            // Set NLog MDLC so JsonLayout can include correlationId in structured logs.
-            try
-            {
-                MappedDiagnosticsLogicalContext.Set("CorrelationId", correlationId);
-            }
-            catch { }
-
-            try
+            // Use NLog ScopeContext for correlationId, disposing after request.
+            using (NLog.ScopeContext.PushProperty("CorrelationId", correlationId))
             {
                 await _next(context).ConfigureAwait(false);
-            }
-            finally
-            {
-                try { MappedDiagnosticsLogicalContext.Remove("CorrelationId"); } catch { }
             }
         }
     }

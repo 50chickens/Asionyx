@@ -33,7 +33,11 @@ namespace Asionyx.Services.Deployment.Tests
                             options.DefaultAuthenticateScheme = Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName;
                             options.DefaultChallengeScheme = Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName;
                         }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler>(
-                            Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options => { });
+                            Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options =>
+                            {
+                                // No options to set, but DI will provide TimeProvider.System
+                            });
+                        services.AddSingleton<TimeProvider>(TimeProvider.System);
                         services.AddAuthorization();
                     });
                     webHost.Configure(app =>
