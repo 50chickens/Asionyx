@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers
 {
     [ApiController]
     [Route("healthz")]
+    [AllowAnonymous]
     public class HealthController : ControllerBase
     {
         [HttpGet]

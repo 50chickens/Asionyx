@@ -1,5 +1,3 @@
-using System;
-
 namespace Asionyx.Library.Core
 {
     /// <summary>

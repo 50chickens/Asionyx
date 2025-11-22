@@ -33,15 +33,16 @@ public class ApiKeyService : IApiKeyService
             // best-effort: load synchronously if possible
             try { _plainKey = EnsureApiKeyAsync().GetAwaiter().GetResult(); } catch { return false; }
         }
-        return string.Equals(provided, _plainKey, StringComparison.Ordinal);
+        return string.Equals(provided?.Trim(), _plainKey?.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<string> EnsureApiKeyAsync()
     {
         if (!string.IsNullOrWhiteSpace(_plainKey)) return _plainKey!;
 
-        // 1) environment variable
-        var env = Environment.GetEnvironmentVariable("API_KEY");
+        // 1) environment variable (prefer X_API_KEY to match header name `X-API-KEY`)
+        var env = Environment.GetEnvironmentVariable("X_API_KEY");
+        if (string.IsNullOrWhiteSpace(env)) env = Environment.GetEnvironmentVariable("API_KEY");
         if (!string.IsNullOrWhiteSpace(env))
         {
             _plainKey = env;
@@ -82,18 +83,18 @@ public class ApiKeyService : IApiKeyService
 
         // 3) generate and persist (encrypted) if possible
         _plainKey = Guid.NewGuid().ToString("N");
-            try
-            {
-                var protectedValue = _protector.Protect(_plainKey);
-                var dir = Path.GetDirectoryName(_etcPath);
-                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                await File.WriteAllTextAsync(_etcPath, protectedValue);
-                _logger.Info($"Generated and persisted encrypted API key to {_etcPath}");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to persist encrypted API key to disk; continuing with in-memory key");
-            }
+        try
+        {
+            var protectedValue = _protector.Protect(_plainKey);
+            var dir = Path.GetDirectoryName(_etcPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(_etcPath, protectedValue);
+            _logger.Info($"Generated and persisted encrypted API key to {_etcPath}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to persist encrypted API key to disk; continuing with in-memory key");
+        }
 
         return _plainKey;
     }

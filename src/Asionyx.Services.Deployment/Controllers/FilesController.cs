@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
 [ApiController]
 [Route("filesystem/files")]
+[Authorize]
 public class FilesController : ControllerBase
 {
     public record FileRequest(string Action, string Path, string? Content);

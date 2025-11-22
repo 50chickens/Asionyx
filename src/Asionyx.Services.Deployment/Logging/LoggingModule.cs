@@ -1,11 +1,5 @@
-using Autofac;
-using Autofac.Core;
 using Asionyx.Library.Core;
-using NLog;
-using NLog.Config;
-using NLog.Layouts;
-using NLog.Targets;
-using Microsoft.Extensions.Configuration;
+using Autofac;
 
 namespace Asionyx.Services.Deployment.Logging
 {
@@ -27,9 +21,9 @@ namespace Asionyx.Services.Deployment.Logging
             NLog.LogManager.Configuration = nlogConfig;
 
             // Register generic ILog<T> -> NLogLogger<T>
-                 builder.RegisterGeneric(typeof(Asionyx.Library.Core.NLogLoggerCore<>))
-                     .As(typeof(ILog<>))
-                     .SingleInstance();
+            builder.RegisterGeneric(typeof(Asionyx.Library.Core.NLogLoggerCore<>))
+                .As(typeof(ILog<>))
+                .SingleInstance();
         }
     }
 }

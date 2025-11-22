@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-using Asionyx.Library.Core;
 using NLog;
 
 namespace Asionyx.Library.Core

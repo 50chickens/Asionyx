@@ -1,10 +1,12 @@
 using Asionyx.Library.Core;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[AllowAnonymous]
 public class InfoController : ControllerBase
 {
     private readonly ISystemConfigurator _configurator;

@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+    [Authorize]
 public class PackagesController : ControllerBase
 {
     public record PackageRequest(string Action, string[] Packages);

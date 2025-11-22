@@ -1,7 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -9,14 +7,11 @@ using System.Text;
 using System.Threading.Tasks;
 using Asionyx.Library.Core;
 using Asionyx.Library.Shared.Diagnostics;
-using Asionyx.Services.Deployment.Controllers;
 using Asionyx.Services.Deployment.Middleware;
-using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
@@ -29,75 +24,37 @@ namespace Asionyx.Services.Deployment.Tests
     {
         private IHostBuilder CreateHostBuilder()
         {
+            Environment.SetEnvironmentVariable("API_KEY", "valid-key");
+            Environment.SetEnvironmentVariable("X_API_KEY", "valid-key");
             return new HostBuilder().ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();
-                webHost.ConfigureAppConfiguration(cfg => cfg.AddInMemoryCollection(new[] { new KeyValuePair<string, string?>("Testing:Insecure", "false") }));
+                webHost.ConfigureAppConfiguration(cfg => { /* enforce auth; no Testing:Insecure */ });
                 webHost.ConfigureServices(services =>
                 {
-                    services.AddControllers().AddNewtonsoftJson();
+                    services.AddControllers()
+                        .AddApplicationPart(typeof(Asionyx.Services.Deployment.Controllers.InfoController).Assembly)
+                        .AddNewtonsoftJson();
+                    services.AddRouting();
+                    services.AddAuthorization();
+                    services.AddAuthentication(options =>
+                    {
+                        options.DefaultAuthenticateScheme = Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName;
+                        options.DefaultChallengeScheme = Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName;
+                    }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler>(
+                        Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options => { });
                     services.AddSingleton<ISystemConfigurator, TestSystemConfigurator>();
                     services.AddSingleton<IApiKeyService>(new TestApiKeyService("valid-key"));
-                    services.AddSingleton<IAppDiagnostics>(new TestDiagnostics());
-                    services.AddSingleton(typeof(Asionyx.Library.Core.ILog<>), typeof(Asionyx.Library.Core.NLogLoggerCore<>));
+                    services.AddSingleton<IAppDiagnostics>(new TestAppDiagnostics());
+                    services.AddSingleton(typeof(ILog<>), typeof(NLogLoggerCore<>));
                 });
 
                 webHost.Configure(app =>
                 {
                     app.UseCorrelationId();
-
-                    app.Use(async (context, next) =>
-                    {
-                        var cfg = context.RequestServices.GetService<IConfiguration>();
-                        var insecure = cfg?[("Testing:Insecure")];
-                        if (!string.IsNullOrWhiteSpace(insecure) && (insecure == "1" || insecure.Equals("true", StringComparison.OrdinalIgnoreCase)))
-                        {
-                            await next();
-                            return;
-                        }
-
-                        if (string.Equals(context.Request.Method, "GET", StringComparison.OrdinalIgnoreCase))
-                        {
-                            await next();
-                            return;
-                        }
-
-                        var path = context.Request.Path.Value ?? string.Empty;
-                        if (path.IndexOf("info", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            await next();
-                            return;
-                        }
-
-                        var apiKeyService = context.RequestServices.GetService<IApiKeyService>();
-                        if (apiKeyService == null)
-                        {
-                            context.Response.StatusCode = 500;
-                            context.Response.ContentType = "application/json; charset=utf-8";
-                            await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "API key service not available" }));
-                            return;
-                        }
-
-                        if (!context.Request.Headers.TryGetValue("X-API-KEY", out var provided) || string.IsNullOrWhiteSpace(provided))
-                        {
-                            context.Response.StatusCode = 401;
-                            context.Response.ContentType = "application/json; charset=utf-8";
-                            await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "Missing API key" }));
-                            return;
-                        }
-
-                        if (!apiKeyService.Validate(provided.ToString()))
-                        {
-                            context.Response.StatusCode = 403;
-                            context.Response.ContentType = "application/json; charset=utf-8";
-                            await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "Invalid API key" }));
-                            return;
-                        }
-
-                        await next();
-                    });
-
                     app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
                     app.UseEndpoints(e => e.MapControllers());
                 });
             });
@@ -128,12 +85,14 @@ namespace Asionyx.Services.Deployment.Tests
             var client = host.GetTestClient();
 
             // GET /packages: may return 200 (if dpkg available) or 500 when dpkg missing; assert either
-            var g = await client.GetAsync("/packages");
+            var gReq = new HttpRequestMessage(HttpMethod.Get, "/packages");
+            gReq.Headers.Add("X-Api-Key", "valid-key");
+            var g = await client.SendAsync(gReq);
             Assert.That((int)g.StatusCode, Is.EqualTo(200).Or.EqualTo(500));
 
             // POST /packages without body but with API key -> BadRequest
             var req = new HttpRequestMessage(HttpMethod.Post, "/packages") { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
-            req.Headers.Add("X-API-KEY", "valid-key");
+            req.Headers.Add("X-Api-Key", "valid-key");
             var p = await client.SendAsync(req);
             Assert.That(p.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "POST /packages with invalid body should return BadRequest");
 
@@ -153,7 +112,7 @@ namespace Asionyx.Services.Deployment.Tests
             content.Add(streamContent, "file", "upload.txt");
 
             var req = new HttpRequestMessage(HttpMethod.Post, "/package") { Content = content };
-            req.Headers.Add("X-API-KEY", "valid-key");
+            req.Headers.Add("X-Api-Key", "valid-key");
 
             var r = await client.SendAsync(req);
             Assert.That(r.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "Uploading non-.nupkg should return BadRequest");
@@ -174,7 +133,7 @@ namespace Asionyx.Services.Deployment.Tests
             // Write
             var writeBody = JsonConvert.SerializeObject(new { Action = "write", Path = testFile, Content = "xyz" });
             var writeReq = new HttpRequestMessage(HttpMethod.Post, "/filesystem/files") { Content = new StringContent(writeBody, Encoding.UTF8, "application/json") };
-            writeReq.Headers.Add("X-API-KEY", "valid-key");
+            writeReq.Headers.Add("X-Api-Key", "valid-key");
             var wr = await client.SendAsync(writeReq);
             Assert.That(wr.StatusCode, Is.EqualTo(HttpStatusCode.OK), "Write should return OK");
             Assert.That(File.Exists(testFile), Is.True, "File should exist after write");
@@ -184,14 +143,14 @@ namespace Asionyx.Services.Deployment.Tests
             // List directory
             var listBody = JsonConvert.SerializeObject(new { Action = "list", Path = tmp });
             var listReq = new HttpRequestMessage(HttpMethod.Post, "/filesystem/files") { Content = new StringContent(listBody, Encoding.UTF8, "application/json") };
-            listReq.Headers.Add("X-API-KEY", "valid-key");
+            listReq.Headers.Add("X-Api-Key", "valid-key");
             var lr = await client.SendAsync(listReq);
             Assert.That(lr.StatusCode, Is.EqualTo(HttpStatusCode.OK), "List should return OK");
 
             // Delete
             var delBody = JsonConvert.SerializeObject(new { Action = "delete", Path = testFile });
             var delReq = new HttpRequestMessage(HttpMethod.Post, "/filesystem/files") { Content = new StringContent(delBody, Encoding.UTF8, "application/json") };
-            delReq.Headers.Add("X-API-KEY", "valid-key");
+            delReq.Headers.Add("X-Api-Key", "valid-key");
             var dr = await client.SendAsync(delReq);
             Assert.That(dr.StatusCode, Is.EqualTo(HttpStatusCode.OK), "Delete should return OK");
             Assert.That(File.Exists(testFile), Is.False, "File should be removed after delete");
@@ -210,32 +169,11 @@ namespace Asionyx.Services.Deployment.Tests
 
             var body = JsonConvert.SerializeObject(new { Action = "start", Name = "foo" });
             var req = new HttpRequestMessage(HttpMethod.Post, "/systemd") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-            req.Headers.Add("X-API-KEY", "valid-key");
+            req.Headers.Add("X-Api-Key", "valid-key");
             var r = await client.SendAsync(req);
             Assert.That(r.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError), "/systemd should return 500 when exec missing");
 
             await host.StopAsync();
-        }
-
-        // Simple in-test implementations
-        private class TestApiKeyService : IApiKeyService
-        {
-            private readonly string _valid;
-            public TestApiKeyService(string valid) => _valid = valid;
-            public bool Validate(string key) => key == _valid;
-            public Task<string> EnsureApiKeyAsync() => Task.FromResult(_valid);
-        }
-
-        private class TestDiagnostics : IAppDiagnostics
-        {
-            public Task<T?> ReadAsync<T>(string name, System.Threading.CancellationToken cancellationToken = default) => Task.FromResult<T?>(default);
-            public Task WriteAsync(string name, object data, System.Threading.CancellationToken cancellationToken = default) => Task.CompletedTask;
-        }
-
-        private class TestSystemConfigurator : ISystemConfigurator
-        {
-            public string GetInfo() => "test-config";
-            public void ApplyConfiguration(string json) { }
         }
     }
 }

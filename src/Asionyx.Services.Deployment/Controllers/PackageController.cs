@@ -1,10 +1,12 @@
 using System.IO.Compression;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
 
 [ApiController]
 [Route("package")]
+[Authorize]
 public class PackageController : ControllerBase
 {
     [HttpPost]

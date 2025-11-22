@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 using Asionyx.Library.Core;
 using Asionyx.Library.Shared.Diagnostics;
-using Asionyx.Services.Deployment.Services;
 using Asionyx.Services.Deployment.Middleware;
+using Asionyx.Services.Deployment.Security;
+using Microsoft.AspNetCore.Authentication;
+using Asionyx.Services.Deployment.Services;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Newtonsoft.Json;
@@ -33,6 +35,13 @@ var builder = Host.CreateDefaultBuilder(args)
             // Use Newtonsoft for controller JSON formatting to keep TestHost/TestServer
             // responses and request handling consistent with Newtonsoft-based tests.
             services.AddControllers().AddNewtonsoftJson();
+            // Register authentication using API key scheme as default
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = ApiKeyAuthenticationHandler.SchemeName;
+                options.DefaultChallengeScheme = ApiKeyAuthenticationHandler.SchemeName;
+            }).AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+                ApiKeyAuthenticationHandler.SchemeName, options => { });
             services.AddOptions();
             services.AddDataProtection();
             services.AddSingleton<IApiKeyService, ApiKeyService>();
@@ -104,75 +113,13 @@ var builder = Host.CreateDefaultBuilder(args)
                 }
             });
 
-            // API Key enforcement uses the IApiKeyService
+            // Ensure API key exists at startup (prefers env X_API_KEY then API_KEY), and persist if required
             var apiKeyService = app.ApplicationServices.GetService(typeof(IApiKeyService)) as IApiKeyService;
-            try
-            {
-                // ensure a key exists (prefers env API_KEY), and persists an encrypted copy if needed
-                _ = apiKeyService?.EnsureApiKeyAsync().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error ensuring API key: {ex.Message}");
-            }
-
-            app.Use(async (context, next) =>
-            {
-                // If running in an insecure test mode (configured by appsettings), skip API key enforcement.
-                try
-                {
-                    var cfg = app.ApplicationServices.GetService(typeof(Microsoft.Extensions.Configuration.IConfiguration)) as Microsoft.Extensions.Configuration.IConfiguration;
-                    var insecure = cfg?["Testing:Insecure"];
-                    if (!string.IsNullOrWhiteSpace(insecure) && (insecure == "1" || insecure.Equals("true", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        await next();
-                        return;
-                    }
-                }
-                catch { }
-                // Allow unauthenticated access to /info (allow trailing slash or subpaths)
-                var path = context.Request.Path.Value ?? string.Empty;
-                // Allow all GET requests to be unauthenticated to simplify integration testing in disposable containers
-                if (string.Equals(context.Request.Method, "GET", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    await next();
-                    return;
-                }
-                Console.WriteLine($"[DEBUG] Middleware request: Method={context.Request.Method} Path={path} Host={context.Request.Host}");
-                if (path.IndexOf("info", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    await next();
-                    return;
-                }
-
-                if (apiKeyService == null)
-                {
-                    context.Response.StatusCode = 500;
-                    context.Response.ContentType = "application/json; charset=utf-8";
-                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "API key service not available" }));
-                    return;
-                }
-
-                if (!context.Request.Headers.TryGetValue("X-API-KEY", out var provided) || string.IsNullOrWhiteSpace(provided))
-                {
-                    context.Response.StatusCode = 401;
-                    context.Response.ContentType = "application/json; charset=utf-8";
-                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "Missing API key" }));
-                    return;
-                }
-
-                if (!apiKeyService.Validate(provided.ToString()))
-                {
-                    context.Response.StatusCode = 403;
-                    context.Response.ContentType = "application/json; charset=utf-8";
-                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "Invalid API key" }));
-                    return;
-                }
-
-                await next();
-            });
+            _ = apiKeyService?.EnsureApiKeyAsync().GetAwaiter().GetResult();
 
             app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
             app.UseEndpoints(endpoints => endpoints.MapControllers());
         });
     })

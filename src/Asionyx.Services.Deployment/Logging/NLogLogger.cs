@@ -1,6 +1,4 @@
-using System;
 using Asionyx.Library.Core;
-using NLog;
 
 namespace Asionyx.Services.Deployment.Logging
 {

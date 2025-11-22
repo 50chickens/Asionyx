@@ -17,13 +17,7 @@ namespace Asionyx.Services.Deployment.Tests;
 [TestFixture]
 public class ApiKeyMiddlewareTests
 {
-    class TestApiKeyService : IApiKeyService
-    {
-        private readonly string _key;
-        public TestApiKeyService(string key) { _key = key; }
-        public Task<string> EnsureApiKeyAsync() => Task.FromResult(_key);
-        public bool Validate(string provided) => string.Equals(provided, _key, StringComparison.Ordinal);
-    }
+    // Use the promoted top-level `TestApiKeyService` helper instead of a nested class.
 
     [Test]
     public async Task ValidApiKey_AllowsPost()

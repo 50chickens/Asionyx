@@ -2,9 +2,9 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Asionyx.Library.Testing;
 using Newtonsoft.Json;
 using NUnit.Framework;
-using Asionyx.Library.Testing;
 
 namespace Asionyx.Services.Deployment.IntegrationTests;
 

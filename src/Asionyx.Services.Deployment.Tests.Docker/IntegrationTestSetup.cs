@@ -1,9 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using NUnit.Framework;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Configurations;
+using NUnit.Framework;
 
 [SetUpFixture]
 public class IntegrationTestSetup
@@ -32,18 +31,18 @@ public class IntegrationTestSetup
 
             // Use the repository's Testcontainers implementation (ContainerBuilder)
             // Enforce a 60 second readiness timeout via the wait strategy modifier.
-                _container = new ContainerBuilder()
-                .WithName("asionyx_integration_shared")
-                .WithImage("asionyx/deployment:local")
-                .WithCleanUp(true)
-                .WithPortBinding(5000, true)
-                .WithEnvironment("API_KEY", apiKey)
-                // Ensure container stdout/stderr are forwarded to the test process so initialization logs appear in NUnit output.
-                .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
-                .WithWaitStrategy(Wait.ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
-                        waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
-                .Build();
+            _container = new ContainerBuilder()
+            .WithName("asionyx_integration_shared")
+            .WithImage("asionyx/deployment:local")
+            .WithCleanUp(true)
+            .WithPortBinding(5000, true)
+            .WithEnvironment("X_API_KEY", apiKey)
+            // Ensure container stdout/stderr are forwarded to the test process so initialization logs appear in NUnit output.
+            .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
+            .WithWaitStrategy(Wait.ForUnixContainer()
+                .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
+                    waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
+            .Build();
 
             try
             {

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Asionyx.Library.Shared.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Asionyx.Services.Deployment.Controllers;
@@ -12,6 +13,7 @@ public class SystemdRequest
 
 [ApiController]
 [Route("[controller]")]
+[Authorize]
 public class SystemdController : ControllerBase
 {
     private readonly IAppDiagnostics? _diag;
