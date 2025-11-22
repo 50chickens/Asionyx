@@ -52,3 +52,5 @@ DesignTimeBuild
 coverage.cobertura.xml
 coverage-report
 src/artifacts/**
+**/CoverageReport
+**/TestResults
