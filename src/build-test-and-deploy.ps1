@@ -110,10 +110,27 @@ function Test-Integration {
         [Parameter(Mandatory = $true)]
         $buildContext
     )
-    $solutionFileName = $buildContext.solutionFileName
-    Write-Host "Running integration tests" -ForegroundColor Green
-    # Run integration test project (contains all Docker-backed integration tests)
-    dotnet test $solutionFileName -c Release --no-build    
+        $resultsDir = Join-Path $PSScriptRoot "TestResults"
+        if (-not (Test-Path $resultsDir)) { New-Item -ItemType Directory -Path $resultsDir | Out-Null }
+        Write-Host "\n==== Running: dotnet test $solutionFileName -c Debug --collect=`"XPlat Code Coverage`" --logger trx --results-directory $resultsDir ====" -ForegroundColor Yellow
+        $testOutput = dotnet test $solutionFileName -c Debug --collect:"XPlat Code Coverage" --logger trx --results-directory $resultsDir
+        Write-Host $testOutput
+        $covFiles = Get-ChildItem -Path $resultsDir -Recurse -Filter 'coverage.cobertura.xml' | Sort-Object LastWriteTime -Descending
+        if ($covFiles.Count -eq 0) {
+            Write-Host "No code coverage data found for any test project." -ForegroundColor Red
+            return
+        }
+        Write-Host "\n==== CODE COVERAGE SUMMARY ====" -ForegroundColor Cyan
+        foreach ($file in $covFiles) {
+            Write-Host ("Coverage file: $file") -ForegroundColor Green
+            $lines = Get-Content $file | Select-String -Pattern '<coverage ' -Context 0,10
+            if ($lines) {
+                $lines | ForEach-Object { Write-Host $_.Line }
+            } else {
+                Write-Host "(Coverage XML generated, but no summary line found)" -ForegroundColor Yellow
+            }
+        }
+        Write-Host "==== END COVERAGE SUMMARY ====" -ForegroundColor Cyan
 }
 
 function Save-LogsAndCleanup {

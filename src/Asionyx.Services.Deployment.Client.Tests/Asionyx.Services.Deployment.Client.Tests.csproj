@@ -4,6 +4,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+  <PackageReference Include="coverlet.collector" Version="6.0.4">
+    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    <PrivateAssets>all</PrivateAssets>
+  </PackageReference>
   <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="NUnit" Version="4.4.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.2.0" />
@@ -13,8 +17,5 @@
   <ItemGroup>
     
   </ItemGroup>
-  <ItemGroup>
-    <!-- Exclude moved integration tests -->
-    <Compile Remove="ClientIntegrationTests.cs" />
-  </ItemGroup>
+  <!-- Removed exclusion of ClientIntegrationTests.cs so it is included in test runs and coverage -->
 </Project>
