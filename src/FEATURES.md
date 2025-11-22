@@ -92,11 +92,15 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
     - Removes reliance on `TEST_*` environment variables — tests must not rely on any container env vars except `API_KEY` for authentication.
     - Integration tests were reorganized to share a single test-wide container lifecycle and a shared `HttpClient` across endpoint-focused test classes (e.g., Info/Status/Systemd/Packages/Filesystem/PackageUpload tests).
 
+
   ---
 
   ## Orchestrator / Packaging / Runtime
 
   - `build-test-and-deploy.ps1` (orchestrator) publishes the required projects to `src/publish` (e.g., `deployment`, `systemd`, `helloworld`) and then builds the Docker image (`asionyx/deployment:local`) from the published output.
+  - The orchestrator collects code coverage for all test projects and prints a human-readable summary to the console after tests run. It also generates HTML and text coverage reports using ReportGenerator.
+  - The orchestrator ensures the ReportGenerator tool is installed as a local tool and uses it for coverage reporting.
+  - Console-only diagnostics: No diagnostics or log files are written in the container; this is enforced in both the orchestrator and service code.
   - Important: the orchestrator builds the image only — it does NOT start containers nor inject API keys or other test environment settings into test processes. Container lifecycle and API key injection are handled by the integration test harness.
   - After integration tests complete the orchestrator ensures cleanup: it removes the built Docker image (if present) and deletes the publish folder.
   - Build policy: the image must not perform `dotnet restore`/`dotnet build` inside the image; all publishing is done outside and the Dockerfile copies published output into the runtime image.
@@ -108,11 +112,13 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
   - The systemd emulator (`Asionyx.Services.Deployment.SystemD`) behaves as a CLI-driven emulator rather than a full systemd runtime. The deployment service invokes it to create unit files and to start/stop managed apps (HelloWorld).
   - Managed apps are launched as background/detached processes so the deployment container remains running while HelloWorld runs. The integration tests confirm HelloWorld `/info` as the readiness signal.
 
+
   ---
 
   ## Diagnostics & instrumentation
 
-  - The service provides `IAppDiagnostics` / `FileDiagnostics` which persist structured JSON diagnostics for post-mortem analysis.
+  - The service and orchestrator enforce console-only diagnostics: no log files or diagnostics directories are written in the container at runtime or test time.
+  - Code coverage is collected and reported for all test projects, with both console and HTML/text reports generated after each run.
   - Controllers and diagnostics serialization use `Newtonsoft.Json` consistently across endpoints and diagnostics outputs.
 
   ---

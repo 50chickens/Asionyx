@@ -22,92 +22,58 @@ public class IntegrationTestSetup
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        try
-        {
-            TestContext.Progress.WriteLine("Starting container setup...");
+        TestContext.Progress.WriteLine("Starting container setup...");
 
-            var apiKey = Guid.NewGuid().ToString("N");
-            ContainerApiKey = apiKey;
+        var apiKey = Guid.NewGuid().ToString("N");
+        ContainerApiKey = apiKey;
 
-            // Use the repository's Testcontainers implementation (ContainerBuilder)
-            // Enforce a 60 second readiness timeout via the wait strategy modifier.
-            _container = new ContainerBuilder()
+        _container = new ContainerBuilder()
             .WithName("asionyx_integration_shared")
             .WithImage("asionyx/deployment:local")
             .WithCleanUp(true)
             .WithPortBinding(5000, true)
             .WithEnvironment("X_API_KEY", apiKey)
-            // Ensure container stdout/stderr are forwarded to the test process so initialization logs appear in NUnit output.
-            .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
+            // .WithOutputConsumer(Consume.RedirectStdoutAndStderrToConsole())
+            // .WithLogger(new ConsoleLogger())
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
                     waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
             .Build();
 
-            try
-            {
-                // Start the container with a cancellation token to enforce a hard timeout
-                var startTimeoutSeconds = 150; // default (120 + 30)
-                try
-                {
-                    var envTimeout = Environment.GetEnvironmentVariable("TEST_CONTAINER_START_TIMEOUT_SECONDS");
-                    if (!string.IsNullOrWhiteSpace(envTimeout) && int.TryParse(envTimeout, out var parsed))
-                    {
-                        startTimeoutSeconds = parsed;
-                    }
-                }
-                catch { }
-
-                using (var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(startTimeoutSeconds)))
-                {
-                    _container.StartAsync(cts.Token).GetAwaiter().GetResult();
-                }
-
-                _startedContainer = true;
-
-                var mappedPort = _container.GetMappedPublicPort(5000);
-                TestHostPort = mappedPort.ToString();
-
-                TestContext.Progress.WriteLine($"Container setup succeeded: port={TestHostPort}");
-
-                // Create a shared HttpClient for tests targeting the container.
-                var baseAddress = new Uri($"http://localhost:{TestHostPort}");
-                Client = new System.Net.Http.HttpClient { BaseAddress = baseAddress };
-
-                // Ensure the client includes the API key we injected into the container.
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(ContainerApiKey))
-                    {
-                        Client.DefaultRequestHeaders.Add("X-API-KEY", ContainerApiKey);
-                    }
-                }
-                catch { }
-            }
-            catch (Exception startEx)
-            {
-                TestContext.Progress.WriteLine($"Container setup failed: {startEx.Message}");
-
-                // Attempt to retrieve container logs to aid diagnosis.
-                try
-                {
-                    var (stdout, stderr) = _container != null ? _container.GetLogsAsync().GetAwaiter().GetResult() : (string.Empty, string.Empty);
-                    if (!string.IsNullOrWhiteSpace(stdout)) TestContext.Progress.WriteLine("---- container stdout ----\n" + stdout);
-                    if (!string.IsNullOrWhiteSpace(stderr)) TestContext.Progress.WriteLine("---- container stderr ----\n" + stderr);
-                }
-                catch (Exception logEx)
-                {
-                    TestContext.Progress.WriteLine($"Failed to read container logs: {logEx.Message}");
-                }
-
-                throw;
-            }
-        }
-        catch (Exception ex)
+        // Start the container with a cancellation token to enforce a hard timeout
+        var startTimeoutSeconds = 150;
+        var envTimeout = Environment.GetEnvironmentVariable("TEST_CONTAINER_START_TIMEOUT_SECONDS");
+        if (!string.IsNullOrWhiteSpace(envTimeout) && int.TryParse(envTimeout, out var parsed))
         {
-            TestContext.Progress.WriteLine($"IntegrationTestSetup failed: {ex.Message}");
-            throw;
+            startTimeoutSeconds = parsed;
         }
+
+        using (var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(startTimeoutSeconds)))
+        {
+            _container.StartAsync(cts.Token).GetAwaiter().GetResult();
+        }
+
+        _startedContainer = true;
+
+        var mappedPort = _container.GetMappedPublicPort(5000);
+        TestHostPort = mappedPort.ToString();
+        TestContext.Progress.WriteLine($"Container setup succeeded: port={TestHostPort}");
+
+        // Create a shared HttpClient for tests targeting the container.
+        var baseAddress = new Uri($"http://localhost:{TestHostPort}");
+        Client = new System.Net.Http.HttpClient { BaseAddress = baseAddress };
+
+        if (!string.IsNullOrWhiteSpace(ContainerApiKey))
+        {
+            Client.DefaultRequestHeaders.Add("X-API-KEY", ContainerApiKey);
+        }
+
+        // Always write container logs to artifacts/diagnostics after startup
+        var (stdout, stderr) = _container != null ? _container.GetLogsAsync().GetAwaiter().GetResult() : (string.Empty, string.Empty);
+        var diagDir = System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "artifacts", $"diagnostics_{DateTime.UtcNow:yyyyMMddHHmmss}");
+        System.IO.Directory.CreateDirectory(diagDir);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stdout.txt"), stdout ?? string.Empty);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stderr.txt"), stderr ?? string.Empty);
     }
 
     [OneTimeTearDown]
@@ -116,33 +82,22 @@ public class IntegrationTestSetup
         if (_startedContainer && _container != null)
         {
             TestContext.Progress.WriteLine("Stopping container...");
-            try
-            {
-                _container.StopAsync().GetAwaiter().GetResult();
-                _container.DisposeAsync().GetAwaiter().GetResult();
-                TestContext.Progress.WriteLine("Container stopped.");
-            }
-            catch (Exception ex)
-            {
-                TestContext.Progress.WriteLine($"Container stop/cleanup failed: {ex.Message}");
-            }
+            _container.StopAsync().GetAwaiter().GetResult();
+            _container.DisposeAsync().GetAwaiter().GetResult();
+            TestContext.Progress.WriteLine("Container stopped.");
         }
     }
 
     // Provides a small helper to run commands inside the started container and return stdout.
     public static async Task<string> ReadFileFromContainerAsync(string path)
     {
-        try
+        if (_container == null) return null;
+        var cmd = new[] { "/bin/sh", "-c", $"cat {path}" };
+        var execResult = await _container.ExecAsync(cmd, default);
+        if (execResult.ExitCode == 0)
         {
-            if (_container == null) return null;
-            var cmd = new[] { "/bin/sh", "-c", $"cat {path}" };
-            var execResult = await _container.ExecAsync(cmd, default);
-            if (execResult.ExitCode == 0)
-            {
-                return execResult.Stdout?.Trim() ?? string.Empty;
-            }
+            return execResult.Stdout?.Trim() ?? string.Empty;
         }
-        catch { }
         return string.Empty;
     }
 
@@ -150,15 +105,8 @@ public class IntegrationTestSetup
     public static async Task<ExecResult> ExecInContainerAsync(string[] command)
     {
         if (_container == null) return new ExecResult(-1, string.Empty, string.Empty);
-        try
-        {
-            var exec = await _container.ExecAsync(command, default);
-            return new ExecResult(exec.ExitCode, exec.Stdout ?? string.Empty, exec.Stderr ?? string.Empty);
-        }
-        catch (Exception ex)
-        {
-            return new ExecResult(-1, string.Empty, ex.Message);
-        }
+        var exec = await _container.ExecAsync(command, default);
+        return new ExecResult(exec.ExitCode, exec.Stdout ?? string.Empty, exec.Stderr ?? string.Empty);
     }
 
     // Wait for /info to become available. Used by tests to ensure readiness.
@@ -168,12 +116,8 @@ public class IntegrationTestSetup
         var attempts = Math.Max(1, timeoutSeconds);
         for (int i = 0; i < attempts; i++)
         {
-            try
-            {
-                var resp = await Client.GetAsync("/info");
-                if (resp.IsSuccessStatusCode) return;
-            }
-            catch { }
+            var resp = await Client.GetAsync("/info");
+            if (resp.IsSuccessStatusCode) return;
             await Task.Delay(1000);
         }
         throw new TimeoutException("/info did not become available within the timeout");

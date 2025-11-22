@@ -13,61 +13,24 @@ catch { /* optional: ignore if not available */ }
 // Register diagnostics writer. Directory can be overridden with configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
 builder.Services.AddSingleton<IAppDiagnostics>(sp =>
 {
-    var cfg = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
-    var useStdout = cfg?["Diagnostics:ToStdout"];
-    if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
-    {
-        return new ConsoleDiagnostics();
-    }
-
-    var dirCfg = cfg?["Diagnostics:Dir"];
-    string dir;
-    if (!string.IsNullOrWhiteSpace(dirCfg)) dir = dirCfg!;
-    else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) dir = Path.Combine(Path.GetTempPath(), "asionyx", "diagnostics");
-    else dir = "/var/asionyx/diagnostics";
-    return new FileDiagnostics(dir);
+    // Always use console diagnostics; do not write diagnostics/log files into the container.
+    return new ConsoleDiagnostics();
 });
 
 var app = builder.Build();
 
-// Write a small startup diagnostics file to aid container-run post-mortems.
-try
-{
-    var diag = app.Services.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
-    diag?.WriteAsync("startup", new { Timestamp = DateTime.UtcNow, Message = "HelloWorld started" }).GetAwaiter().GetResult();
-}
-catch
-{
-    // don't let diagnostics failures block startup
-}
+// No startup diagnostics file is written; diagnostics are only output to console.
 
-// Exception-capturing middleware for HelloWorld so failures produce diagnostics files.
+// Exception-capturing middleware for HelloWorld: log to console only.
 app.Use(async (context, next) =>
 {
-    var diag = context.RequestServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
     try
     {
         await next();
     }
     catch (Exception ex)
     {
-        try
-        {
-            if (diag != null)
-            {
-                var name = $"exception_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
-                var diagObj = new
-                {
-                    Timestamp = DateTime.UtcNow,
-                    Exception = ex.ToString(),
-                    Path = context.Request?.Path.Value,
-                    Method = context.Request?.Method
-                };
-                diag.WriteAsync(name, diagObj).GetAwaiter().GetResult();
-            }
-        }
-        catch { }
-
+        Console.WriteLine($"[Exception] {DateTime.UtcNow:o} {ex}");
         context.Response.StatusCode = 500;
         await context.Response.WriteAsync("internal");
     }

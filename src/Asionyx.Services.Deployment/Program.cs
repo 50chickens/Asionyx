@@ -51,19 +51,8 @@ var builder = Host.CreateDefaultBuilder(args)
             // Register diagnostics writer. Directory can be overridden via configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
             services.AddSingleton<IAppDiagnostics>(sp =>
             {
-                var cfg = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
-                var useStdout = cfg?[("Diagnostics:ToStdout")]?.ToString();
-                if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return new ConsoleDiagnostics();
-                }
-
-                var dirCfg = cfg?[("Diagnostics:Dir")];
-                string dir;
-                if (!string.IsNullOrWhiteSpace(dirCfg)) dir = dirCfg!;
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) dir = Path.Combine(Path.GetTempPath(), "asionyx", "diagnostics");
-                else dir = "/var/asionyx/diagnostics";
-                return new FileDiagnostics(dir);
+                // Always use console diagnostics; do not write diagnostics/log files into the container.
+                return new ConsoleDiagnostics();
             });
         });
 
@@ -113,9 +102,31 @@ var builder = Host.CreateDefaultBuilder(args)
                 }
             });
 
+
             // Ensure API key exists at startup (prefers env X_API_KEY then API_KEY), and persist if required
             var apiKeyService = app.ApplicationServices.GetService(typeof(IApiKeyService)) as IApiKeyService;
-            _ = apiKeyService?.EnsureApiKeyAsync().GetAwaiter().GetResult();
+            var apiKey = apiKeyService?.EnsureApiKeyAsync().GetAwaiter().GetResult();
+
+            // Always write a startup diagnostics file for troubleshooting
+            try
+            {
+                var diag = app.ApplicationServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
+                if (diag != null)
+                {
+                    var diagObj = new
+                    {
+                        Timestamp = DateTime.UtcNow,
+                        Message = "Startup diagnostics",
+                        Environment = Environment.GetEnvironmentVariables(),
+                        ApiKey = apiKey,
+                        Host = Environment.MachineName,
+                        User = Environment.UserName,
+                        WorkingDirectory = Environment.CurrentDirectory
+                    };
+                    diag.WriteAsync($"startup_{DateTime.UtcNow:yyyyMMddHHmmssfff}", diagObj).GetAwaiter().GetResult();
+                }
+            }
+            catch { /* Swallow diagnostics errors */ }
 
             app.UseRouting();
             app.UseAuthentication();
