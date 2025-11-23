@@ -12,7 +12,7 @@ public class ApiKeyEnforcementTests
     [SetUp]
     public async Task SetUp()
     {
-        await IntegrationTestSetup.EnsureInfoAvailableAsync().ConfigureAwait(false);
+        await IntegrationTestSetup.ContainerManager.EnsureInfoAvailableAsync().ConfigureAwait(false);
     }
 
     [Test]
@@ -24,7 +24,7 @@ public class ApiKeyEnforcementTests
             Content = new StringContent(string.Empty, Encoding.UTF8, "application/json")
         };
 
-        var client = new HttpClient { BaseAddress = IntegrationTestSetup.Client.BaseAddress };
+        var client = new HttpClient { BaseAddress = IntegrationTestSetup.ContainerManager.Client.BaseAddress };
 
         var resp = await client.SendAsync(req).ConfigureAwait(false);
         Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
@@ -34,7 +34,7 @@ public class ApiKeyEnforcementTests
     public async Task Post_WithApiKey_IsNot401()
     {
         // Use the shared client which includes the injected ContainerApiKey header.
-        var resp = await IntegrationTestSetup.Client.PostAsync("/packages", new StringContent(string.Empty, Encoding.UTF8, "application/json")).ConfigureAwait(false);
+        var resp = await IntegrationTestSetup.ContainerManager.Client.PostAsync("/packages", new StringContent(string.Empty, Encoding.UTF8, "application/json")).ConfigureAwait(false);
         Assert.That(resp.StatusCode, Is.Not.EqualTo(HttpStatusCode.Unauthorized));
     }
 }

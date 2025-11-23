@@ -15,7 +15,8 @@
     <PackageReference Include="NSubstitute" Version="5.3.0" />
   </ItemGroup>
   <ItemGroup>
-    
+    <!-- Use the shared testing helpers in Asionyx.Library.Testing instead of Asionyx.Test.Shared -->
+    <ProjectReference Include="..\Asionyx.Library.Testing\Asionyx.Library.Testing.csproj" />
   </ItemGroup>
   <!-- Removed exclusion of ClientIntegrationTests.cs so it is included in test runs and coverage -->
 </Project>

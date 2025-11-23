@@ -19,5 +19,6 @@
     <ProjectReference Include="..\Asionyx.Services.Deployment\Asionyx.Services.Deployment.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Shared\Asionyx.Library.Shared.csproj" />
     <ProjectReference Include="..\Asionyx.Library.Testing\Asionyx.Library.Testing.csproj" />
+    <!-- Shared test helpers moved into Asionyx.Library.Testing -->
   </ItemGroup>
 </Project>

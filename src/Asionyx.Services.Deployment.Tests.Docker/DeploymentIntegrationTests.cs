@@ -14,14 +14,11 @@ public class DeploymentIntegrationTests
 {
     private System.Net.Http.HttpClient Client;
 
-    [OneTimeSetUp]
-    public async Task OneTimeSetUp() => await IntegrationTestSetup.EnsureInfoAvailableAsync();
-
     [SetUp]
     public void SetUp()
     {
-        Client = IntegrationTestSetup.Client;
-        Assert.That(Client, Is.Not.Null, "HttpClient must be initialized by IntegrationTestSetup");
+        Client = IntegrationTestSetup.ContainerManager.Client;
+        Assert.That(Client, Is.Not.Null, "HttpClient must be initialized by SharedContainerManager");
     }
 
     [Test]

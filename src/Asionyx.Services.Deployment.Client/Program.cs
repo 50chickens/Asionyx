@@ -19,12 +19,12 @@ try
     switch (command)
     {
         case "info":
-            var info = await client.GetFromJsonAsync<object>($"{baseUrl}/info");
-            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(info, Newtonsoft.Json.Formatting.Indented));
+            var info = await client.GetStringAsync($"{baseUrl}/info");
+            Console.WriteLine(info);
             break;
         case "status":
-            var status = await client.GetFromJsonAsync<object>($"{baseUrl}/status");
-            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(status, Newtonsoft.Json.Formatting.Indented));
+            var status = await client.GetStringAsync($"{baseUrl}/status");
+            Console.WriteLine(status);
             break;
         case "systemd":
             if (args.Length < 3) { Console.Error.WriteLine("Usage: client systemd <action> <name>"); return 2; }

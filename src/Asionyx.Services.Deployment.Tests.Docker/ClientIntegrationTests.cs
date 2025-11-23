@@ -8,13 +8,15 @@ namespace Asionyx.Services.Deployment.IntegrationTests;
 public class ClientIntegrationTests
 {
     [OneTimeSetUp]
-    public async Task OneTimeSetUp() => await IntegrationTestSetup.EnsureInfoAvailableAsync();
-
+    public async Task OneTimeSetUp() => await IntegrationTestSetup.ContainerManager.EnsureInfoAvailableAsync();
     [Test]
-    public async Task Client_Can_Call_Info()
+    [Description("the client info endpoint test")]
+    public async Task The_Client_Info_Endpoint_Test()
     {
-        var client = IntegrationTestSetup.Client;
-        Assert.That(client, Is.Not.Null, "HttpClient must be initialized by IntegrationTestSetup");
+        // Call /info without an API key. Do not reuse the ContainerManager's client since it may include the key header.
+        var port = IntegrationTestSetup.ContainerManager.TestHostPort;
+        var baseAddress = new System.Uri($"http://localhost:{port}");
+        using var client = new System.Net.Http.HttpClient { BaseAddress = baseAddress };
 
         var resp = await client.GetAsync("/info");
         resp.EnsureSuccessStatusCode();
