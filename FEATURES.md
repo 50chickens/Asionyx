@@ -1,61 +1,34 @@
 # Project features
 
-This file lists the features the solution is expected to provide and notes their current implementation status.
+This file is the canonical list of project features, current status, and prioritized action items.
 
-for a feature to be considered implemented it needs to have -
+Summary
+- The repository provides a small deployment API (`Asionyx.Services.Deployment`) plus a SystemD emulator (`Asionyx.Services.Deployment.SystemD`) and a sample `HelloWorld` service. Integration tests use a shared test harness to start a Docker image built by the orchestrator and validate endpoints (notably readiness via `/info`).
 
-- an api endpoint that performs the operation.
-- an integration test.
-- the Asionyx.Services.Deployment.Client has a corresponding option to call the api endpoint on the Asionyx.Services.Deployment service.
+Core guarantees / rules
+- Integration tests must not rely on container env vars except `API_KEY` (tests are responsible for injecting the API key).
+- The orchestrator publishes projects and builds the Docker image (it does not start containers or inject API keys).
+- Controllers return typed DTOs and non-sensitive errors (see `docs/CODING_GUIDELINES.md`).
 
-## Asionyx.Services.Deployment (PRESENT)
+Prioritized Actionable Plan
 
-- net9.0 Kestrel web service hosting API endpoints for local machine configuration. (IMPLEMENTED)
-  - it has following endpoints (IMPLEMENTED)
-    - `/info` — returns application version based on assembly version. (IMPLEMENTED)
-    - `/status` — returns 200 OK when the service has appropriate permissions. (IMPLEMENTED)
-    - `/systemd` — manage systemd-style services: add/remove/start/stop/status. (IMPLEMENTED)
-    - `/packages` — manage apt packages (install/remove/list). (IMPLEMENTED)
-    - `/filesystem/files` — manage files (upload/download/write/read/delete). (IMPLEMENTED)
-    - `/package` — accepts a `.nupkg`, extracts to uploads dir and returns `manifest.json`. (IMPLEMENTED)
+1. [Critical] Replace anonymous response objects with explicit DTOs (Controllers: Info, Files, Package, Packages, Systemd)
+2. [Critical] Remove hard-coded file paths and magic strings (introduce `DeploymentOptions` / `EmulatorOptions` and bind via `IOptions<T>`)
+3. [High] Make process invocation safe and cancellable (`IProcessRunner`, argument lists, timeouts, CancellationToken)
+4. [High] Encapsulate side effects behind interfaces (`IFileSystem`, `IProcessRunner`, `IArchiveExtractor`, `IUploadStore`)
+5. [High] Avoid synchronous blocking in startup and auth (remove `.GetAwaiter().GetResult()` usages)
+6. [High] Strengthen API key handling and auth separation (`IApiKeyService`, constant-time comparison, header constant)
+7. [Medium] Improve error handling and avoid leaking stack traces (centralized error middleware and `ErrorDto`)
+8. [Medium] Centralize logging via `ILogger<T>`/`ILog<T>` and correlation propagation (`X-Correlation-ID` middleware)
+9. [Medium] Add focused unit and integration tests for edge cases (file-permission, timeouts, malformed inputs)
+10. [Low] Clean docs and remove duplicate/legacy content (consolidate `docs/CODING_GUIDELINES.md` and this file)
+11. [Low] CI: enforce `dotnet format --verify-no-changes` and Roslyn analyzers as blocking checks
+12. [Low] Use typed options via `IOptions<T>` for paths, upload limits, and timeouts
 
-### Testing workflow / requirements
-
-- Integration tests drive the emulator via the deployment service (`/systemd`). The container-ready signal is that the `Asionyx.Services.HelloWorld` `/info` endpoint is reachable after being started via the emulator. (REQUIREMENT)
-- Integration tests must not rely on any environment variables inside the container except `API_KEY` for authentication. (REQUIREMENT)
-- The systemd emulator treats managed apps as .NET apps and launches published DLLs with `dotnet <dll>` or single-file executables as appropriate. (REQUIREMENT)
-- Managed services are launched as background processes so the deployment container continues running. (REQUIREMENT)
-
-### Security / API key
-
-- All endpoints except `/info` are protected by `X-API-KEY`. (IMPLEMENTED)
-- `IApiKeyService` centralises key lifecycle; service prefers `API_KEY` env var, otherwise reads `/etc/asionyx_api_key`, or generates and persists an encrypted key using ASP.NET Data Protection. (IMPLEMENTED)
-
-## Packaging / Runtime
-
-- The orchestrator (`build-test-and-deploy.ps1`) publishes projects outside the image; the Dockerfile copies published output into a minimal runtime image. (IMPLEMENTED)
-- Build policy: the container image must NOT build the solution inside the image; publishing is done outside the image. (IMPLEMENTED)
-
-## Diagnostics
-
-- In-process diagnostics writer (`IAppDiagnostics`/`FileDiagnostics`) persists structured JSON for post-mortem inspection using `Newtonsoft.Json` and atomic writes. (IMPLEMENTED)
-
-## CI / infra notes
-
-- A GitHub Actions CI workflow exists to build and run tests (`.github/workflows/ci.yml`). The CI progress items are tracked separately. (ADDED)
-- Fix warnings about `Microsoft.CodeAnalysis.NetAnalyzers` package mismatch have been addressed in the repo. (IMPLEMENTED)
-
-## Development / next steps
-
-- Run the full orchestrator script to exercise the full E2E flow (publish → build image → run container → run tests). (IMPLEMENTED — orchestrator run completed locally in workspace)
-- If you want CI to run the orchestrator automatically, ensure the CI runner has Docker and permission to run the published workflow (tracked as a follow-up).
-
----
-
-If you'd like, I can now:
-- run the orchestrator again to re-validate, or
-- push these documentation updates to a branch and open a PR, or
-- update the CI workflow to run the orchestrator (requires adjusting CI permissions).
+If you want, I can:
+- Open small PRs for each change above (recommended: one PR per prioritized item)
+- Add the CI workflow that enforces formatting and analyzers (blocked until you confirm)
+- Continue implementing items 10..12 now (docs, CI, typed options)
 ```markdown
 # Project features
 
@@ -215,3 +188,61 @@ the Asionyx.Services.Deployment.Client has a corrosponding option to call the ap
     - **Observability improvements:** ensure container stdout/stderr are forwarded to test logs (already implemented) and wire correlation-id into diagnostics outputs.
 
     These items are being implemented incrementally. Code changes for correlation-id middleware, `GET /healthz`, and the API-key enforcement integration test are in progress; one documentation patch was previously attempted and re-applied here.
+
+  ## Code Review Action Items (prioritized)
+
+  The following actionable plan is derived from the recent code review and the merged `docs/CODING_GUIDELINES.md`. Each item should be implemented with tests and a small migration PR.
+
+  1. [Critical] Replace anonymous response objects with explicit DTOs
+    - Affected controllers: `InfoController`, `FilesController`, `PackageController`, `PackagesController`, `SystemdController`.
+    - Benefit: improves contracts, typing, serialization, discoverability and backward-compatibility.
+
+  2. [Critical] Remove hard-coded file paths and magic strings
+    - Examples: `/usr/local/bin/Asionyx.Services.Deployment.SystemD`, `/var/asionyx_uploads`, `/etc/asionyx_api_key`.
+    - Action: introduce `DeploymentOptions` / `EmulatorOptions` and bind via `IOptions<T>`.
+
+  3. [High] Make process invocation safe and cancellable
+    - Implement `IProcessRunner` abstraction: use `ProcessStartInfo.ArgumentList`, async reads, timeouts and `CancellationToken` support.
+    - Replace blocking `WaitForExit` and synchronous `ReadToEnd`.
+
+  4. [High] Encapsulate side effects behind interfaces
+    - Introduce `IFileSystem`, `IProcessRunner`, `IArchiveExtractor`, `IUploadStore` and inject into controllers/services.
+    - Use in-memory/fake implementations in tests.
+
+  5. [High] Avoid synchronous blocking in startup and auth
+    - Remove `.GetAwaiter().GetResult()` usages in `Program.cs` and authentication handlers; prefer async initialization or graceful startup semantics.
+
+  6. [High] Strengthen API key handling and auth separation
+    - Centralize key retrieval/validation in `IApiKeyService`; avoid duplicate env/config reads in auth handler.
+    - Use a constant for header name and constant-time comparison for secret validation.
+
+  7. [Medium] Improve error handling and avoid leaking stack traces
+    - Return typed error DTOs and sanitized messages to clients; log full exceptions at appropriate levels.
+    - Standardize an error mapping strategy (exceptions -> HTTP status + error code).
+
+  8. [Medium] Centralize logging via `ILogger<T>` and correlation propagation
+    - Ensure all components use `ILogger<T>` and include `X-Correlation-ID` consistently in logs and diagnostics.
+
+  9. [Medium] Add focused unit and integration tests for edge cases
+    - Controller contract tests, malformed input, file-permission errors, process timeouts, and auth enforcement tests.
+
+  10. [Low] Clean docs and remove duplicate/legacy content
+     - Consolidate `docs/CODING_GUIDELINES.md` and sync these action items into `FEATURES.md`.
+
+  11. [Low] CI: enforce `dotnet format --verify-no-changes` and Roslyn analyzers as blocking checks
+     - Prevent style/regression churn and catch analyzer issues early.
+
+  12. [Low] Use typed options via `IOptions<T>` for paths, upload limits, and timeouts
+     - Bind a small `DeploymentOptions`/`EmulatorOptions` for uploads dir, exec path, diagnostics dir, and timeouts.
+
+  Quick next steps (first 3 priorities):
+  - Introduce DTOs for controllers and update integration/unit tests to assert contracts.
+  - Extract configuration options for paths into typed options and read from `IConfiguration`/`IOptions<T>`.
+  - Implement `IProcessRunner`, replace direct `Process` usage, add timeouts and cancellation handling.
+
+  Files to update (suggested):
+  - `docs/CODING_GUIDELINES.md`
+  - `FEATURES.md`
+  - Controllers and services listed above
+
+  Each change should include tests and a small migration PR. Avoid crude in-place behavior changes without tests.

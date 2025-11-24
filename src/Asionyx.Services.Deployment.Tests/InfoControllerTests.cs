@@ -13,6 +13,8 @@ namespace Asionyx.Services.Deployment.Tests
 
             var result = controller.Get();
             Assert.That(result, Is.InstanceOf<OkObjectResult>());
+            var ok = result as OkObjectResult;
+            Assert.That(ok?.Value, Is.InstanceOf<Asionyx.Services.Deployment.Controllers.InfoDto>());
         }
     }
 }

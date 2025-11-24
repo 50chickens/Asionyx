@@ -21,7 +21,7 @@ public class InfoController : ControllerBase
     [HttpGet]
     public IActionResult Get()
     {
-        var info = new
+        var info = new InfoDto
         {
             Service = "Asionyx.Services.Deployment",
             Configurator = _configurator.GetInfo(),

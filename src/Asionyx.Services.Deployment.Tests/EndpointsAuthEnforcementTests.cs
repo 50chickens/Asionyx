@@ -28,7 +28,6 @@ namespace Asionyx.Services.Deployment.Tests
         private async Task<IHost> BuildAndStartHostAsync(CancellationToken ct)
         {
             Environment.SetEnvironmentVariable("API_KEY", "valid-key");
-            Environment.SetEnvironmentVariable("X_API_KEY", "valid-key");
             var hostBuilder = new HostBuilder()
                 .ConfigureWebHost(webHost =>
                 {
@@ -49,6 +48,8 @@ namespace Asionyx.Services.Deployment.Tests
                             Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options => { });
                         services.AddSingleton<TimeProvider>(TimeProvider.System);
                         services.AddSingleton<ISystemConfigurator, TestSystemConfigurator>();
+                        // Ensure process runner available for controller activation in tests
+                        services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
                         services.AddSingleton<IApiKeyService>(new TestApiKeyService("valid-key"));
                         services.AddSingleton(typeof(ILog<>), typeof(NLogLoggerCore<>));
                     });

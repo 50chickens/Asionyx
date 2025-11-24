@@ -16,7 +16,7 @@ public class ApiKeyServiceTests
     public async Task EnsureApiKey_PrefersEnvironmentVariable_AndDoesNotPersist()
     {
         var envKey = "env-test-key-123";
-        Environment.SetEnvironmentVariable("X_API_KEY", envKey);
+        Environment.SetEnvironmentVariable("API_KEY", envKey);
 
         var protectorDir = Path.Combine(Path.GetTempPath(), "asionyx-dp-env");
         Directory.CreateDirectory(protectorDir);
@@ -33,7 +33,7 @@ public class ApiKeyServiceTests
         Assert.That(File.Exists(tempFile), Is.False, "Env-provided key should not be persisted to disk");
 
         // cleanup
-        Environment.SetEnvironmentVariable("X_API_KEY", null);
+        Environment.SetEnvironmentVariable("API_KEY", null);
         try { Directory.Delete(protectorDir, true); } catch { }
     }
 

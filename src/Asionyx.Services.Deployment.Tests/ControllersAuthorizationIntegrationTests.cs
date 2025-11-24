@@ -17,7 +17,7 @@ namespace Asionyx.Services.Deployment.Tests
         [Test]
         public async Task FilesController_RequiresAuthorization()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", "files-key");
+            Environment.SetEnvironmentVariable("API_KEY", "files-key");
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -36,6 +36,7 @@ namespace Asionyx.Services.Deployment.Tests
                         }).AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler>(
                             Asionyx.Services.Deployment.Security.ApiKeyAuthenticationHandler.SchemeName, options => { });
                         services.AddSingleton<TimeProvider>(TimeProvider.System);
+                        services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
                         services.AddAuthorization();
                     });
                     webHost.Configure(app =>

@@ -23,7 +23,8 @@ public class SharedContainerManager : IAsyncDisposable
             .WithImage("asionyx/deployment:local")
             .WithCleanUp(true)
             .WithPortBinding(5000, true)
-            .WithEnvironment("X_API_KEY", apiKey)
+            // Tests inject the API key into the container via the `API_KEY` environment variable.
+            .WithEnvironment("API_KEY", apiKey)
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
                     waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
@@ -50,6 +51,8 @@ public class SharedContainerManager : IAsyncDisposable
         Client = new System.Net.Http.HttpClient { BaseAddress = baseAddress };
         if (!string.IsNullOrWhiteSpace(ContainerApiKey))
         {
+            // Client uses the HTTP header `X-API-KEY` when making requests, but the container
+            // receives the secret via `API_KEY` env var at startup (do not log it).
             Client.DefaultRequestHeaders.Add("X-API-KEY", ContainerApiKey);
         }
 

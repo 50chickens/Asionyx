@@ -10,9 +10,9 @@ namespace Asionyx.Services.Deployment.Tests
         public void Post_Invalid_Request_Returns_BadRequest()
         {
             var controller = Get<Asionyx.Services.Deployment.Controllers.PackagesController>();
-
-            var result = controller.Post(null);
-            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+                var task = controller.Post(null);
+                var result = task.GetAwaiter().GetResult();
+                Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
     }
 }

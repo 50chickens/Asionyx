@@ -19,7 +19,7 @@ namespace Asionyx.Services.Deployment.Tests
         [Test]
         public async Task MissingApiKey_Returns_Unauthorized()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -39,6 +39,8 @@ namespace Asionyx.Services.Deployment.Tests
                             });
                         services.AddSingleton<TimeProvider>(TimeProvider.System);
                         services.AddAuthorization();
+                        // Provide a process runner for any controller activation during tests
+                        services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
                     });
                     webHost.Configure(app =>
                     {
@@ -56,13 +58,13 @@ namespace Asionyx.Services.Deployment.Tests
             var client = host.GetTestClient();
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
 
         [Test]
         public async Task ValidApiKey_AllowsAccess()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", "test-key-123");
+            Environment.SetEnvironmentVariable("API_KEY", "test-key-123");
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -96,13 +98,13 @@ namespace Asionyx.Services.Deployment.Tests
             client.DefaultRequestHeaders.Add("X-API-KEY", "test-key-123");
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
 
         [Test]
         public async Task InvalidApiKey_Returns_Unauthorized()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", "real-key");
+            Environment.SetEnvironmentVariable("API_KEY", "real-key");
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -141,7 +143,7 @@ namespace Asionyx.Services.Deployment.Tests
         [Test]
         public async Task ConfigApiKey_AllowsAccess()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -181,13 +183,13 @@ namespace Asionyx.Services.Deployment.Tests
             client.DefaultRequestHeaders.Add("X-API-KEY", "cfg-key");
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
 
         [Test]
         public async Task ServiceFallback_AllowsAccess()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -224,14 +226,14 @@ namespace Asionyx.Services.Deployment.Tests
             client.DefaultRequestHeaders.Add("X-API-KEY", "svc-key");
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
 
         [Test]
         public async Task HeaderProvidedButNoExpectedKey_Returns_Unauthorized()
         {
             // No env, no config, no service
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -265,13 +267,13 @@ namespace Asionyx.Services.Deployment.Tests
             client.DefaultRequestHeaders.Add("X-API-KEY", "some-key");
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
 
         [Test]
         public async Task CaseInsensitive_AcceptsDifferentCasing()
         {
-            Environment.SetEnvironmentVariable("X_API_KEY", "AbCdEf");
+            Environment.SetEnvironmentVariable("API_KEY", "AbCdEf");
 
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -305,7 +307,7 @@ namespace Asionyx.Services.Deployment.Tests
             client.DefaultRequestHeaders.Add("X-API-KEY", "abcdef");
             var resp = await client.GetAsync("/authtest");
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Environment.SetEnvironmentVariable("X_API_KEY", null);
+            Environment.SetEnvironmentVariable("API_KEY", null);
         }
     }
 }

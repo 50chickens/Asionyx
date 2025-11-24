@@ -22,6 +22,8 @@ namespace Asionyx.Services.Deployment.Tests
 
             // Register known concrete dependencies used by controllers
             services.AddSingleton<ISystemConfigurator, TestSystemConfigurator>();
+            // Provide a default process runner so controllers depending on IProcessRunner resolve in tests
+            services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
 
             var provider = services.BuildServiceProvider();
 

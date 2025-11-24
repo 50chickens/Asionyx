@@ -20,10 +20,11 @@ namespace Asionyx.Services.Deployment.Logging
             var nlogConfig = new NLog.Extensions.Logging.NLogLoggingConfiguration(_configuration.GetSection("NLog"));
             NLog.LogManager.Configuration = nlogConfig;
 
-            // Register generic ILog<T> -> NLogLogger<T>
-            builder.RegisterGeneric(typeof(Asionyx.Library.Core.NLogLoggerCore<>))
+            // Register generic ILog<T> -> LoggerAdapter<T> which delegates to Microsoft.Extensions.Logging.ILogger<T>
+            // This centralizes logging on ILogger<T> while keeping NLog as the provider.
+            builder.RegisterGeneric(typeof(Asionyx.Library.Core.LoggerAdapter<>))
                 .As(typeof(ILog<>))
-                .SingleInstance();
+                .InstancePerDependency();
         }
     }
 }

@@ -15,19 +15,22 @@ public class FilesController : ControllerBase
     public IActionResult List([FromQuery] string? path)
     {
         var target = string.IsNullOrWhiteSpace(path) ? "/" : path;
-        if (System.IO.File.Exists(target))
+        var fs = HttpContext?.RequestServices.GetService(typeof(Asionyx.Services.Deployment.Services.IFileSystem)) as Asionyx.Services.Deployment.Services.IFileSystem ?? new Asionyx.Services.Deployment.Services.LocalFileSystem();
+        if (fs.FileExists(target))
         {
-            var content = System.IO.File.ReadAllText(target);
-            return Ok(new { type = "file", path = target, content });
+            var content = fs.ReadAllText(target);
+            var dto = new FileResultDto { Type = "file", Path = target, Content = content };
+            return new OkObjectResult(dto);
         }
-        else if (System.IO.Directory.Exists(target))
+        else if (fs.DirectoryExists(target))
         {
-            var entries = System.IO.Directory.GetFileSystemEntries(target);
-            return Ok(new { type = "directory", path = target, entries });
+            var entries = fs.GetFileSystemEntries(target);
+            var dto = new FileResultDto { Type = "directory", Path = target, Entries = entries };
+            return new OkObjectResult(dto);
         }
         else
         {
-            return NotFound(new { error = "Path not found", path = target });
+            return NotFound(new ErrorDto { Error = "Path not found", Path = target });
         }
     }
 
@@ -35,40 +38,41 @@ public class FilesController : ControllerBase
     public IActionResult Post([FromBody] FileRequest req)
     {
         if (req is null || string.IsNullOrWhiteSpace(req.Action) || string.IsNullOrWhiteSpace(req.Path))
-            return BadRequest(new { error = "Invalid request. Provide Action and Path." });
+            return BadRequest(new ErrorDto { Error = "Invalid request. Provide Action and Path." });
 
         var action = req.Action.ToLowerInvariant();
-        try
-        {
-            if (action == "write")
+            try
             {
-                System.IO.File.WriteAllText(req.Path, req.Content ?? string.Empty);
-                return Ok(new { result = "written", path = req.Path });
-            }
-            else if (action == "delete")
-            {
-                if (System.IO.File.Exists(req.Path))
+                var fs = HttpContext?.RequestServices.GetService(typeof(Asionyx.Services.Deployment.Services.IFileSystem)) as Asionyx.Services.Deployment.Services.IFileSystem ?? new Asionyx.Services.Deployment.Services.LocalFileSystem();
+                if (action == "write")
                 {
-                    System.IO.File.Delete(req.Path);
-                    return Ok(new { result = "deleted", path = req.Path });
+                    fs.WriteAllText(req.Path, req.Content ?? string.Empty);
+                    return new OkObjectResult(new ActionResultDto { Result = "written", Path = req.Path });
                 }
-                return NotFound(new { error = "File not found", path = req.Path });
-            }
-            else if (action == "list")
-            {
-                if (System.IO.Directory.Exists(req.Path))
+                else if (action == "delete")
                 {
-                    var entries = System.IO.Directory.GetFileSystemEntries(req.Path);
-                    return Ok(new { result = "listed", path = req.Path, entries });
+                    if (fs.FileExists(req.Path))
+                    {
+                        fs.DeleteFile(req.Path);
+                        return new OkObjectResult(new ActionResultDto { Result = "deleted", Path = req.Path });
+                    }
+                    return NotFound(new ErrorDto { Error = "File not found", Path = req.Path });
                 }
-                return NotFound(new { error = "Directory not found", path = req.Path });
-            }
+                else if (action == "list")
+                {
+                    if (fs.DirectoryExists(req.Path))
+                    {
+                        var entries = fs.GetFileSystemEntries(req.Path);
+                        return new OkObjectResult(new ActionResultDto { Result = "listed", Path = req.Path, Entries = entries });
+                    }
+                    return NotFound(new ErrorDto { Error = "Directory not found", Path = req.Path });
+                }
 
-            return BadRequest(new { error = "Unknown action. Supported: write, delete, list" });
-        }
+                return BadRequest(new ErrorDto { Error = "Unknown action. Supported: write, delete, list" });
+            }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.ToString() });
+            return StatusCode(500, new ErrorDto { Error = "Internal error", Detail = ex.Message });
         }
     }
 

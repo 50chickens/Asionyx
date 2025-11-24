@@ -1,5 +1,5 @@
 using Asionyx.Library.Core;
-using NLog;
+using Microsoft.Extensions.Logging;
 
 namespace Asionyx.Services.Deployment.Middleware
 {
@@ -7,9 +7,9 @@ namespace Asionyx.Services.Deployment.Middleware
     {
         private const string HeaderName = "X-Correlation-ID";
         private readonly RequestDelegate _next;
-        private readonly ILog<CorrelationIdMiddleware> _logger;
+        private readonly ILogger<CorrelationIdMiddleware> _logger;
 
-        public CorrelationIdMiddleware(RequestDelegate next, ILog<CorrelationIdMiddleware> logger)
+        public CorrelationIdMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
         {
             _next = next ?? throw new ArgumentNullException(nameof(next));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -28,8 +28,8 @@ namespace Asionyx.Services.Deployment.Middleware
 
             context.Response.Headers[HeaderName] = correlationId;
 
-            // Use NLog ScopeContext for correlationId, disposing after request.
-            using (NLog.ScopeContext.PushProperty("CorrelationId", correlationId))
+            // Use ASP.NET Core logging scope to propagate correlation id into structured logs
+            using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
             {
                 await _next(context).ConfigureAwait(false);
             }

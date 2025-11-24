@@ -9,6 +9,6 @@ namespace Asionyx.Services.Deployment.Controllers
     public class HealthController : ControllerBase
     {
         [HttpGet]
-        public IActionResult Get() => Ok(new { status = "ok" });
+        public IActionResult Get() => Ok(new HealthDto { Status = "ok" });
     }
 }

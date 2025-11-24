@@ -18,7 +18,7 @@ namespace Asionyx.Services.Deployment.Tests
             // ensure Request.HasFormContentType is false by leaving ContentType null
             controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
-            var result = controller.Post();
+            var result = controller.Post().GetAwaiter().GetResult();
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
     }

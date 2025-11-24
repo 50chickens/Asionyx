@@ -11,7 +11,7 @@ using Asionyx.Library.Shared.Diagnostics;
 
 internal class Program
 {
-    private static int Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         var UnitsDir = Path.Combine(Directory.GetCurrentDirectory(), "units");
         var RuntimeDir = Path.Combine(Directory.GetCurrentDirectory(), "runtime");
@@ -44,13 +44,13 @@ internal class Program
             if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
             {
                 diag = new ConsoleDiagnostics();
-                diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+                await diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (stdout)", UnitsDir, RuntimeDir, LogsDir });
             }
             else
             {
                 var targetDir = !string.IsNullOrWhiteSpace(dirCfg) ? dirCfg! : LogsDir;
                 diag = new FileDiagnostics(targetDir);
-                diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+                await diag.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started", UnitsDir, RuntimeDir, LogsDir });
             }
 
             // Also attempt to write to container-wide diagnostics path used by orchestrator
@@ -60,15 +60,15 @@ internal class Program
                 {
                     var alt = "/var/asionyx/diagnostics";
                     Directory.CreateDirectory(alt);
-                    if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
+                        if (!string.IsNullOrWhiteSpace(useStdout) && (useStdout == "1" || useStdout.Equals("true", StringComparison.OrdinalIgnoreCase)))
                     {
                         diagAlt = new ConsoleDiagnostics();
-                        diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt stdout)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+                        await diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt stdout)", UnitsDir, RuntimeDir, LogsDir });
                     }
                     else
                     {
                         diagAlt = new FileDiagnostics(alt);
-                        diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt)", UnitsDir, RuntimeDir, LogsDir }).GetAwaiter().GetResult();
+                        await diagAlt.WriteAsync("systemd_startup", new { Timestamp = DateTime.UtcNow, Message = "SystemD emulator started (alt)", UnitsDir, RuntimeDir, LogsDir });
                     }
                 }
             }
@@ -89,32 +89,31 @@ internal class Program
         if (cmd == "help") { PrintHelp(); return 0; }
         try
         {
-            return cmd switch
-            {
-                "add" => AddUnit(args.Skip(1).ToArray()),
-                "remove" => RemoveUnit(args.Skip(1).ToArray()),
-                "start" => StartUnit(args.Skip(1).ToArray()),
-                "stop" => StopUnit(args.Skip(1).ToArray()),
-                "status" => StatusUnit(args.Skip(1).ToArray()),
-                "daemon-reload" or "daemon_reload" or "daemonreload" => DaemonReload(),
-                "help" => 0,
-                _ => UnknownCommand(cmd)
-            };
+            int result;
+            if (cmd == "add") result = AddUnit(args.Skip(1).ToArray());
+            else if (cmd == "remove") result = RemoveUnit(args.Skip(1).ToArray());
+            else if (cmd == "start") result = await StartUnit(args.Skip(1).ToArray());
+            else if (cmd == "stop") result = await StopUnit(args.Skip(1).ToArray());
+            else if (cmd == "status") result = await StatusUnit(args.Skip(1).ToArray());
+            else if (cmd == "daemon-reload" || cmd == "daemon_reload" || cmd == "daemonreload") result = DaemonReload();
+            else if (cmd == "help") result = 0;
+            else result = UnknownCommand(cmd);
+            return result;
         }
         catch (Exception ex)
         {
-            try
-            {
-                if (diag != null)
-                {
-                    diag.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() }).GetAwaiter().GetResult();
-                }
-                if (diagAlt != null)
-                {
-                    diagAlt.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() }).GetAwaiter().GetResult();
-                }
-            }
-            catch { }
+                    try
+                    {
+                        if (diag != null)
+                        {
+                            await diag.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() });
+                        }
+                        if (diagAlt != null)
+                        {
+                            await diagAlt.WriteAsync($"fatal_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Error = ex.ToString() });
+                        }
+                    }
+                    catch { }
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 3;
         }
@@ -175,7 +174,7 @@ internal class Program
             return 0;
         }
 
-        int StartUnit(string[] parts)
+        async Task<int> StartUnit(string[] parts)
         {
             if (parts.Length == 0)
             {
@@ -202,8 +201,8 @@ internal class Program
                 {
                     var msg = $"Executable not found: {dllPath}";
                     Console.Error.WriteLine(msg);
-                    try { diag?.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }).GetAwaiter().GetResult(); } catch { }
-                    try { diagAlt?.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }).GetAwaiter().GetResult(); } catch { }
+                    try { if (diag != null) await diag.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }); } catch { }
+                    try { if (diagAlt != null) await diagAlt.WriteAsync($"start_fail_{DateTime.UtcNow:yyyyMMddHHmmssfff}", new { Timestamp = DateTime.UtcNow, Message = msg, DllPath = dllPath }); } catch { }
                     return 1;
                 }
                 exec = $"dotnet {dllPath}";
@@ -213,11 +212,11 @@ internal class Program
             var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
             var settings = new SystemdServiceSettings();
             var sd = new SystemdService(svcName, settings);
-            var started = sd.StartAsync().GetAwaiter().GetResult();
-            return started ? 0 : 3;
+                var started = await sd.StartAsync();
+                return started ? 0 : 3;
         }
 
-        int StopUnit(string[] parts)
+        async Task<int> StopUnit(string[] parts)
         {
             if (parts.Length == 0)
             {
@@ -236,7 +235,7 @@ internal class Program
                 var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
                 var settings = new SystemdServiceSettings();
                 var sd = new SystemdService(svcName, settings);
-                var stopped = sd.StopAsync().GetAwaiter().GetResult();
+                var stopped = await sd.StopAsync();
                 return stopped ? 0 : 3;
             }
             catch (Exception ex)
@@ -246,7 +245,7 @@ internal class Program
             }
         }
 
-        int StatusUnit(string[] parts)
+        async Task<int> StatusUnit(string[] parts)
         {
             if (parts.Length == 0)
             {
@@ -265,7 +264,7 @@ internal class Program
                 var svcName = parts[0].EndsWith(".service", StringComparison.OrdinalIgnoreCase) ? parts[0].Substring(0, parts[0].Length - 8) : parts[0];
                 var settings = new SystemdServiceSettings();
                 var sd = new SystemdService(svcName, settings);
-                var status = sd.GetStatusAsync().GetAwaiter().GetResult();
+                var status = await sd.GetStatusAsync();
                 if (status == SystemdService.ServiceStatus.Active)
                 {
                     Console.WriteLine($"{unitName} running");

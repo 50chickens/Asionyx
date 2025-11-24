@@ -14,6 +14,8 @@ namespace Asionyx.Services.Deployment.Tests
 
             services.AddSingleton<IConfiguration>(config);
             services.AddSingleton<ISystemConfigurator, TestSystemConfigurator>();
+            // Provide a default IProcessRunner for tests so controllers resolve cleanly
+            services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
 
             configure?.Invoke(services);
 

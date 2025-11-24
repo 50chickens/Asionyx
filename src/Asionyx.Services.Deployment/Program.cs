@@ -43,11 +43,14 @@ var builder = Host.CreateDefaultBuilder(args)
             }).AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
                 ApiKeyAuthenticationHandler.SchemeName, options => { });
             services.AddOptions();
+            // Bind typed deployment options from configuration (see DeploymentOptions)
+            services.Configure<Asionyx.Services.Deployment.Configuration.DeploymentOptions>(context.Configuration.GetSection("Deployment"));
             services.AddDataProtection();
             services.AddSingleton<IApiKeyService, ApiKeyService>();
-            // Ensure ILog<T> is available from the default DI container so tests that build
-            // a Host without Autofac can still resolve loggers.
-            services.AddSingleton(typeof(Asionyx.Library.Core.ILog<>), typeof(Asionyx.Library.Core.NLogLoggerCore<>));
+            // Provide an injectable process runner that delegates to the static ProcessRunner.
+            services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
+            // Ensure ILog<T> resolves against the Microsoft ILogger<T> pipeline (via LoggerAdapter)
+            services.AddSingleton(typeof(Asionyx.Library.Core.ILog<>), typeof(Asionyx.Library.Core.LoggerAdapter<>));
             // Register diagnostics writer. Directory can be overridden via configuration `Diagnostics:Dir` or `Diagnostics:ToStdout`.
             services.AddSingleton<IAppDiagnostics>(sp =>
             {
@@ -64,69 +67,45 @@ var builder = Host.CreateDefaultBuilder(args)
             // Ensure every request has a correlation id for observability
             app.UseCorrelationId();
 
-            // Exception-logging middleware: capture unhandled exceptions and persist
-            // a diagnostics JSON file for post-mortem inspection.
-            app.Use(async (context, next) =>
+            // Centralized error handling: map exceptions to sanitized ErrorDto responses
+            app.UseErrorHandling();
+
+
+            // Ensure API key exists at startup (reads `Deployment:ApiKey` from configuration first, otherwise uses env `API_KEY`), and persist if required
+            var apiKeyService = app.ApplicationServices.GetService(typeof(IApiKeyService)) as IApiKeyService;
+
+            // Kick off an asynchronous startup diagnostics/task runner so we do not block host startup.
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    await next();
-                }
-                catch (Exception ex)
-                {
-                    try
+                    string? apiKey = null;
+                    if (apiKeyService != null)
                     {
-                        var diag = context.RequestServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
-                        if (diag != null)
+                        try { apiKey = await apiKeyService.EnsureApiKeyAsync(); } catch { /* best-effort */ }
+                    }
+
+                    var diag = app.ApplicationServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
+                    if (diag != null)
+                    {
+                        var envVars = Environment.GetEnvironmentVariables();
+                        var envKeys = envVars?.Keys.Cast<object?>().OfType<string>().ToArray() ?? Array.Empty<string>();
+                        var diagObj = new
                         {
-                            var name = $"exception_{DateTime.UtcNow:yyyyMMddHHmmssfff}";
-                            var diagObj = new
-                            {
-                                Timestamp = DateTime.UtcNow,
-                                Exception = ex.ToString(),
-                                Path = context.Request?.Path.Value,
-                                Method = context.Request?.Method,
-                                Headers = context.Request?.Headers
-                            };
-                            await diag.WriteAsync(name, diagObj);
-                        }
+                            Timestamp = DateTime.UtcNow,
+                            Message = "Startup diagnostics",
+                            // Do not include environment variable values or the API key in diagnostics to avoid leaking secrets.
+                            EnvironmentKeys = envKeys,
+                            ApiKeyPresent = !string.IsNullOrEmpty(apiKey),
+                            Host = Environment.MachineName,
+                            User = Environment.UserName,
+                            WorkingDirectory = Environment.CurrentDirectory
+                        };
+                        try { await diag.WriteAsync($"startup_{DateTime.UtcNow:yyyyMMddHHmmssfff}", diagObj); } catch { }
                     }
-                    catch
-                    {
-                        // Swallow diagnostics errors to avoid masking the original exception
-                    }
-
-                    context.Response.StatusCode = 500;
-                    context.Response.ContentType = "application/json; charset=utf-8";
-                    await context.Response.WriteAsync(JsonConvert.SerializeObject(new { error = "internal" }));
                 }
+                catch { /* swallow */ }
             });
-
-
-            // Ensure API key exists at startup (prefers env X_API_KEY then API_KEY), and persist if required
-            var apiKeyService = app.ApplicationServices.GetService(typeof(IApiKeyService)) as IApiKeyService;
-            var apiKey = apiKeyService?.EnsureApiKeyAsync().GetAwaiter().GetResult();
-
-            // Always write a startup diagnostics file for troubleshooting
-            try
-            {
-                var diag = app.ApplicationServices.GetService(typeof(IAppDiagnostics)) as IAppDiagnostics;
-                if (diag != null)
-                {
-                    var diagObj = new
-                    {
-                        Timestamp = DateTime.UtcNow,
-                        Message = "Startup diagnostics",
-                        Environment = Environment.GetEnvironmentVariables(),
-                        ApiKey = apiKey,
-                        Host = Environment.MachineName,
-                        User = Environment.UserName,
-                        WorkingDirectory = Environment.CurrentDirectory
-                    };
-                    diag.WriteAsync($"startup_{DateTime.UtcNow:yyyyMMddHHmmssfff}", diagObj).GetAwaiter().GetResult();
-                }
-            }
-            catch { /* Swallow diagnostics errors */ }
 
             app.UseRouting();
             app.UseAuthentication();

@@ -23,7 +23,8 @@ public class SharedContainerManager : IAsyncDisposable
             .WithImage("asionyx/deployment:local")
             .WithCleanUp(true)
             .WithPortBinding(5000, true)
-            .WithEnvironment("X_API_KEY", apiKey)
+            // Tests inject the API key into the container via the `API_KEY` environment variable.
+            .WithEnvironment("API_KEY", apiKey)
             .WithWaitStrategy(Wait.ForUnixContainer()
                 .UntilHttpRequestIsSucceeded(request => request.ForPort(5000).ForPath("/info"),
                     waitStrategy => waitStrategy.WithTimeout(TimeSpan.FromSeconds(90))))
