@@ -81,19 +81,15 @@ public class DebugPreserveContainerTests
 
         var username = "pistomp";
 
-        try
-        {
-            // Build a Testcontainers-based Sshd container using the CI image. Do NOT use volume mounts or privileged mode here.
-            // Provide per-run API key for the deployment service inside the image
-            var apiKey = Guid.NewGuid().ToString("N");
-
-            var builder = new SshdBuilder()
-                .WithImage("audio-linux/ci-systemd-trixie:local")
-                .WithEnvironment("API_KEY", apiKey)
+            try
+            {
+                // Build a Testcontainers-based Sshd container using the CI image. Do NOT use volume mounts or privileged mode here.
                 // Mount host cgroup into container to improve systemd boot behavior on some Docker engines
-                .WithBindMount("/sys/fs/cgroup", "/sys/fs/cgroup")
-                .WithTestUserSetup(username)
-                .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
+                var builder = new SshdBuilder()
+                    .WithImage("audio-linux/ci-systemd-trixie:local")
+                    .WithBindMount("/sys/fs/cgroup", "/sys/fs/cgroup")
+                    .WithTestUserSetup(username)
+                    .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
 
             var container = builder.Build();
 
@@ -227,14 +223,12 @@ public class DebugPreserveContainerTests
         var hostKeyPath = Path.Combine(Path.GetTempPath(), $"ssh_test_key_{Guid.NewGuid():N}");
         File.WriteAllText(hostKeyPath, privatePem, Encoding.ASCII);
 
-        try
-        {
-            var apiKey2 = Guid.NewGuid().ToString("N");
-            var builder = new SshdBuilder()
-                .WithImage("audio-linux/ci-systemd-trixie:local")
-                .WithEnvironment("API_KEY", apiKey2)
-                .WithTestUserSetup(username)
-                .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
+            try
+            {
+                var builder = new SshdBuilder()
+                    .WithImage("audio-linux/ci-systemd-trixie:local")
+                    .WithTestUserSetup(username)
+                    .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
 
             var container = builder.Build();
 
@@ -392,14 +386,12 @@ public class DebugPreserveContainerTests
         var hostKeyPath = Path.Combine(Path.GetTempPath(), $"ssh_test_key_{Guid.NewGuid():N}");
         File.WriteAllText(hostKeyPath, privatePem, Encoding.ASCII);
 
-        try
-        {
-            var apiKey3 = Guid.NewGuid().ToString("N");
-            var builder = new SshdBuilder()
-                .WithImage("audio-linux/ci-systemd-trixie:local")
-                .WithEnvironment("API_KEY", apiKey3)
-                .WithTestUserSetup(username)
-                .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
+            try
+            {
+                var builder = new SshdBuilder()
+                    .WithImage("audio-linux/ci-systemd-trixie:local")
+                    .WithTestUserSetup(username)
+                    .WithPrivateKeyFileCopied(hostKeyPath, containerPrivateKeyPath: $"/home/{username}/.ssh/id_rsa", containerPublicKeyPath: $"/home/{username}/.ssh/authorized_keys");
 
             var container = builder.Build();
 

@@ -27,7 +27,6 @@ namespace Asionyx.Services.Deployment.Tests
 
         private async Task<IHost> BuildAndStartHostAsync(CancellationToken ct)
         {
-            Environment.SetEnvironmentVariable("API_KEY", "valid-key");
             var hostBuilder = new HostBuilder()
                 .ConfigureWebHost(webHost =>
                 {

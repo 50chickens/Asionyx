@@ -24,8 +24,6 @@ namespace Asionyx.Services.Deployment.Tests
     {
         private IHostBuilder CreateHostBuilder()
         {
-            Environment.SetEnvironmentVariable("API_KEY", "valid-key");
-            Environment.SetEnvironmentVariable("API_KEY", "valid-key");
             return new HostBuilder().ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
+using Asionyx.Library.Core;
 
 namespace Asionyx.Services.Deployment.Tests
 {
@@ -17,8 +18,6 @@ namespace Asionyx.Services.Deployment.Tests
         [Test]
         public async Task FilesController_RequiresAuthorization()
         {
-            Environment.SetEnvironmentVariable("API_KEY", "files-key");
-
             using var host = await new HostBuilder()
                 .ConfigureWebHost(webHost =>
                 {
@@ -38,6 +37,8 @@ namespace Asionyx.Services.Deployment.Tests
                         services.AddSingleton<TimeProvider>(TimeProvider.System);
                         services.AddSingleton<Asionyx.Services.Deployment.Services.IProcessRunner, Asionyx.Services.Deployment.Services.DefaultProcessRunner>();
                         services.AddAuthorization();
+                        // Provide a test API key service instead of relying on environment variables
+                        services.AddSingleton<IApiKeyService>(new TestApiKeyService("files-key"));
                     });
                     webHost.Configure(app =>
                     {

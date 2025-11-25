@@ -78,12 +78,8 @@ public class SshClientDeploymentIntegrationTests
     {
                 var username = "pistomp";
 
-                // Per-run API key so the deployment app inside the image uses a known key
-                var apiKey = Guid.NewGuid().ToString("N");
-
                 await using var container = new SshdBuilder()
                     .WithImage("audio-linux/ci-systemd-trixie:local")
-                    .WithEnvironment("API_KEY", apiKey)
                     // Bind the host cgroup filesystem into the container to help systemd boot in non-privileged environments
                     .WithBindMount("/sys/fs/cgroup", "/sys/fs/cgroup")
                     .WithTestUserSetup(username)
