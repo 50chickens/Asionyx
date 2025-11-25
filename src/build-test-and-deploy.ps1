@@ -227,6 +227,17 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
+# Ensure a clean test results directory at the start of orchestration
+$testResultsDir = Join-Path $scriptDir "TestResults"
+if (Test-Path $testResultsDir) {
+    Write-Host "Removing existing TestResults directory: $testResultsDir" -ForegroundColor Yellow
+    try {
+        Remove-Item $testResultsDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Host "Warning: failed to remove TestResults directory: $_" -ForegroundColor Yellow
+    }
+}
+
 # Centralized configuration (edit here)
 $PublishRoot = Join-Path $scriptDir 'publish'
 $projectName = "Asionyx"
@@ -258,7 +269,6 @@ $buildContext = [PSCustomObject]@{
     ShouldCleanupDockerImage = $ShouldCleanupDockerImage
     SolutionFileName = $solutionFileName
 }
-
 
 Install-ReportGeneratorTool
 Restore-Solution -buildContext $buildContext
