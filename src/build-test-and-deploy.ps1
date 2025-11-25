@@ -227,17 +227,28 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-# Ensure a clean test results directory at the start of orchestration
-$testResultsDir = Join-Path $scriptDir "TestResults"
-if (Test-Path $testResultsDir) {
-    Write-Host "Removing existing TestResults directory: $testResultsDir" -ForegroundColor Yellow
-    try {
-        Remove-Item $testResultsDir -Recurse -Force -ErrorAction Stop
-    } catch {
-        Write-Host "Warning: failed to remove TestResults directory: $_" -ForegroundColor Yellow
+function Remove-Directories
+ {
+    param (
+        $directoriesToRemove
+    )
+    $directoriesToRemove |% {
+        $fulldirectoryPath = Join-Path $scriptDir $_
+         if (Test-Path $fulldirectoryPath) 
+         {
+            Write-Host "Removing directory: $fulldirectoryPath" -ForegroundColor Green
+            try 
+            {
+                Remove-Item $fulldirectoryPath -Recurse -Force -ErrorAction Stop
+            } 
+            catch 
+            {
+                Write-Host "Warning: failed to remove directory: $_" -ForegroundColor Yellow
+            }
+         }
     }
+    
 }
-
 # Centralized configuration (edit here)
 $PublishRoot = Join-Path $scriptDir 'publish'
 $projectName = "Asionyx"
@@ -270,6 +281,7 @@ $buildContext = [PSCustomObject]@{
     SolutionFileName = $solutionFileName
 }
 
+Remove-Directories -directoriesToRemove @('publish', 'artifacts', "TestResults")
 Install-ReportGeneratorTool
 Restore-Solution -buildContext $buildContext
 Publish-Projects -buildContext $buildContext
