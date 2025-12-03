@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -49,7 +50,7 @@ public class SharedContainerManager : IAsyncDisposable
         {
             // Try reading appsettings.json from the container first, then fall back to environment variables
             var containerId = _container.Id;
-            string stdout = string.Empty;
+            var stdout = string.Empty;
             try
             {
                 var psi = new ProcessStartInfo("docker", $"exec {containerId} sh -c 'cat /app/appsettings.json || cat /app/appsettings.Development.json'")
@@ -59,12 +60,12 @@ public class SharedContainerManager : IAsyncDisposable
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
-                using var p = Process.Start(psi);
-                if (p != null)
+                using var process = Process.Start(psi);
+                if (process != null)
                 {
-                    stdout = await p.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-                    var serr = await p.StandardError.ReadToEndAsync().ConfigureAwait(false);
-                    p.WaitForExit();
+                    stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+                    var serr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+                    process.WaitForExit();
                 }
             }
             catch { }
@@ -108,11 +109,11 @@ public class SharedContainerManager : IAsyncDisposable
         catch { /* best-effort: do not fail startup when retrieving key for tests */ }
 
         // Always write container logs to artifacts/diagnostics after startup
-        var (stdout, stderr) = _container != null ? await _container.GetLogsAsync() : (string.Empty, string.Empty);
+        var (containerStdOutLogs, containerStdErrLogs) = _container != null ? await _container.GetLogsAsync() : (string.Empty, string.Empty);
         var diagDir = System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "artifacts", $"diagnostics_{DateTime.UtcNow:yyyyMMddHHmmss}");
         System.IO.Directory.CreateDirectory(diagDir);
-        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stdout.txt"), stdout ?? string.Empty);
-        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stderr.txt"), stderr ?? string.Empty);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stdout.txt"), containerStdOutLogs ?? string.Empty);
+        System.IO.File.WriteAllText(System.IO.Path.Combine(diagDir, "container-stderr.txt"), containerStdErrLogs ?? string.Empty);
     }
 
     public async ValueTask DisposeAsync()
