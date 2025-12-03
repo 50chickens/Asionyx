@@ -1,3 +1,11 @@
+using System;
+using System.IO;
+using System.Text;
+using DotNet.Testcontainers;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
+using JetBrains.Annotations;
+
 namespace Testcontainers.Sshd;
 
 /// <inheritdoc cref="ContainerBuilder{TBuilderEntity, TContainerEntity, TConfigurationEntity}" />
@@ -6,16 +14,14 @@ public sealed class SshdBuilder : ContainerBuilder<SshdBuilder, SshdContainer, S
 {
     public const string SshdImage = "linuxserver/openssh-server:latest";
 
-    public const ushort SshdPort = 2222; // linuxserver image uses 2222 inside
+    public const int SshdPort = 2222; // linuxserver image uses 2222 inside
 
-    public SshdBuilder()
-        : this(new SshdConfiguration())
+    public SshdBuilder() : this(new SshdConfiguration())
     {
         DockerResourceConfiguration = Init().DockerResourceConfiguration;
     }
 
-    private SshdBuilder(SshdConfiguration resourceConfiguration)
-        : base(resourceConfiguration)
+    private SshdBuilder(SshdConfiguration resourceConfiguration) : base(resourceConfiguration)
     {
         DockerResourceConfiguration = resourceConfiguration;
     }
@@ -69,10 +75,6 @@ public sealed class SshdBuilder : ContainerBuilder<SshdBuilder, SshdContainer, S
         return merged;
     }
 
-// Removed WithPassword: password-based flow is not required when using key-only authentication.
-
-    // WithSSHPrivateKeyFileFromEnv removed: prefer explicit in-memory WithPrivateKey or WithPrivateKeyFileCopied flows.
-
     /// <summary>
     /// Configure the container to accept the supplied private key for authentication by deriving
     /// the public key and installing it inside the container. The private key is not written to
@@ -108,8 +110,6 @@ public sealed class SshdBuilder : ContainerBuilder<SshdBuilder, SshdContainer, S
 
         return builder;
     }
-
-    // WithPrivateKeyFile (bind-mount) removed to avoid bind-mounting private keys into containers.
 
     /// <summary>
     /// Copy a private key file from the host into the container (no bind-mount).

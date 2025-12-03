@@ -1,3 +1,7 @@
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
+using JetBrains.Annotations;
+
 namespace Testcontainers.Sshd;
 
 /// <inheritdoc cref="ContainerConfiguration" />
